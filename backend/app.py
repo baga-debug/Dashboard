@@ -1276,6 +1276,7 @@ def verify_api_key(request: Request, x_api_key: Optional[str] = Header(None), au
 
 # ---------- routes ----------
 @app.get("/health")
+@app.get("/api/health")
 async def health(request: Request):
     check_rate(request)
     uptime = int(time.time() - STATE.start_ts)

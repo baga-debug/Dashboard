@@ -1179,7 +1179,7 @@ function useLive() {
 
     const fetchHealth = async () => {
       try {
-        const r = await fetch(`${API}/health`)
+        const r = await fetch(`${API}/api/health`)
         const j = await r.json()
         setHealth(j)
       } catch {}
