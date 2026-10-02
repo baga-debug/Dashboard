@@ -1,0 +1,558 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   Apple Design System & Liquid Glass Material Specifications
+   Based on Apple Design Skill & Emil Kowalski Design Engineering
+   - Outfit & Plus Jakarta Sans typography with SF Pro optical metrics
+   - JetBrains Mono tabular figures for non-jittering telemetry
+   - Multi-layer liquid glass: blur(28px) saturate(210%), specular prismatic shine
+   - Dynamic fluid ambient mesh gradient for realistic glass refraction
+   - Contrast-safe Dark & Light modes with instant CSS variable switching
+   - One Piece Poster Fling & Keynote physical spring motion
+   ========================================================================== */
+
+:root {
+  color-scheme: light;
+  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", sans-serif;
+  font-optical-sizing: auto;
+
+  /* Ambient Canvas */
+  --bg: #f4f6fc;
+  --bg-gradient: radial-gradient(ellipse at 15% 10%, rgba(56, 189, 248, 0.16) 0%, transparent 45%),
+    radial-gradient(ellipse at 85% 20%, rgba(168, 85, 247, 0.14) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 90%, rgba(245, 158, 11, 0.10) 0%, transparent 50%),
+    #f4f6fc;
+
+  /* Liquid Glass Palette */
+  --panel: rgba(255, 255, 255, 0.94);
+  --panel-hover: #ffffff;
+  --panel-solid: #ffffff;
+  --chrome: rgba(255, 255, 255, 0.96);
+  --border: rgba(226, 232, 240, 0.92);
+  --border-outer: rgba(15, 23, 42, 0.10);
+  --border-shine: rgba(255, 255, 255, 1);
+  --border-strong: rgba(15, 23, 42, 0.22);
+
+  /* Typography & Accents */
+  --text: #0f172a;
+  --text-secondary: #334155;
+  --muted: #64748b;
+  --accent: #0071e3;
+  --accent-glow: rgba(0, 113, 227, 0.22);
+  --main: #ff9500;
+  --ok: #16a34a;
+  --warn: #d97706;
+  --bad: #dc2626;
+
+  /* Geometry & Shadows */
+  --radius-sm: 10px;
+  --radius: 18px;
+  --radius-lg: 24px;
+  --glass-shadow: 
+    0 20px 40px -15px rgba(15, 23, 42, 0.08),
+    0 4px 16px -2px rgba(15, 23, 42, 0.04),
+    inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 2px 0 rgba(0, 0, 0, 0.03);
+  --glass-shadow-active: 
+    0 28px 55px -12px rgba(15, 23, 42, 0.14),
+    0 8px 24px -4px rgba(15, 23, 42, 0.06),
+    inset 0 1.5px 1.5px 0 rgba(255, 255, 255, 1);
+}
+
+html.dark {
+  color-scheme: dark;
+  --bg: #06080e;
+  --bg-gradient: radial-gradient(ellipse at 15% 10%, rgba(14, 165, 233, 0.14) 0%, transparent 45%),
+    radial-gradient(ellipse at 85% 20%, rgba(139, 92, 246, 0.16) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 85%, rgba(234, 88, 12, 0.10) 0%, transparent 50%),
+    #06080e;
+
+  --panel: rgba(16, 20, 32, 0.94);
+  --panel-hover: rgba(22, 28, 44, 0.98);
+  --panel-solid: #0d121c;
+  --chrome: rgba(11, 14, 23, 0.96);
+  --border: rgba(255, 255, 255, 0.16);
+  --border-outer: rgba(0, 0, 0, 0.6);
+  --border-shine: rgba(255, 255, 255, 0.4);
+  --border-strong: rgba(255, 255, 255, 0.30);
+
+  --text: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --muted: #94a3b8;
+  --accent: #38bdf8;
+  --accent-glow: rgba(56, 189, 248, 0.3);
+  --main: #f59e0b;
+  --ok: #22c55e;
+  --warn: #f59e0b;
+  --bad: #ef4444;
+
+  --glass-shadow: 
+    0 24px 50px -12px rgba(0, 0, 0, 0.75),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.25),
+    inset 0 0 20px 0 rgba(56, 189, 248, 0.05);
+  --glass-shadow-active: 
+    0 32px 70px -15px rgba(0, 0, 0, 0.9),
+    inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.38),
+    inset 0 0 25px 0 rgba(56, 189, 248, 0.12);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg);
+  background-image: var(--bg-gradient);
+  background-attachment: fixed;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.47;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+  transition: background-color 0.4s cubic-bezier(0.16, 1, 0.3, 1), color 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Fancy Display & Telemetry Typography */
+.font-display {
+  font-family: "Outfit", "Plus Jakarta Sans", -apple-system, sans-serif;
+}
+
+.text-gradient-chrome {
+  background: linear-gradient(135deg, #0f172a 0%, #334155 50%, #0f172a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+html.dark .text-gradient-chrome {
+  background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 50%, #94a3b8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gradient-cyan {
+  background: linear-gradient(135deg, #0284c7 0%, #38bdf8 50%, #818cf8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gradient-gold {
+  background: linear-gradient(135deg, #d97706 0%, #f59e0b 50%, #fbbf24 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.display-title {
+  font-family: "Outfit", "Plus Jakarta Sans", sans-serif;
+  font-size: clamp(1.4rem, 2.4vw, 2.1rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.display-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  font-family: "Outfit", -apple-system, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+}
+
+.mono-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.kpi-label {
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ==========================================================================
+   Liquid Glass Materials (True VisionOS / Apple Fluid Refraction)
+   ========================================================================== */
+
+.liquid-glass {
+  background: var(--panel);
+  backdrop-filter: blur(28px) saturate(210%);
+  -webkit-backdrop-filter: blur(28px) saturate(210%);
+  border: 1px solid var(--border);
+  box-shadow: var(--glass-shadow);
+  border-radius: var(--radius);
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.25s ease, background 0.25s ease, box-shadow 0.25s ease;
+}
+
+.liquid-glass::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 5%, var(--border-shine) 50%, transparent 95%);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.liquid-glass-card {
+  background: var(--panel);
+  backdrop-filter: blur(26px) saturate(200%);
+  -webkit-backdrop-filter: blur(26px) saturate(200%);
+  border: 1px solid var(--border);
+  box-shadow: var(--glass-shadow);
+  border-radius: var(--radius);
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+}
+
+.liquid-glass-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1.5px;
+  background: linear-gradient(90deg, transparent 5%, var(--border-shine) 50%, transparent 95%);
+  opacity: 0.85;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Diagonal Specular Sheen (Optical Gloss) */
+.liquid-glass-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.03) 38%, transparent 55%);
+  pointer-events: none;
+  border-radius: inherit;
+  z-index: 5;
+}
+html.dark .liquid-glass-card::after {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.01) 38%, transparent 55%);
+}
+
+.liquid-glass-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--glass-shadow-active);
+  transform: translateY(-4px);
+}
+
+/* Apple Frosted Chrome Header */
+.chrome-header {
+  background: var(--chrome);
+  backdrop-filter: blur(32px) saturate(200%);
+  -webkit-backdrop-filter: blur(32px) saturate(200%);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 4px 24px -2px rgba(15, 23, 42, 0.05);
+}
+
+/* Liquid Pills & Segmented Controls */
+.glass-pill {
+  background: var(--panel);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.6);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-pill:hover {
+  background: var(--panel-hover);
+  border-color: var(--border-strong);
+}
+
+html.dark .glass-pill {
+  background: rgba(16, 20, 32, 0.94);
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.12);
+}
+
+html.dark .glass-pill:hover {
+  background: rgba(24, 30, 48, 0.98);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+/* Touch & Click Feedback: Immediate on pointer down (§1 Response) */
+.pressable {
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  cursor: pointer;
+}
+.pressable:active {
+  transform: scale(0.965);
+  transition: transform 80ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Floating Draggable Dock */
+.draggable-dock {
+  background: var(--chrome);
+  backdrop-filter: blur(36px) saturate(220%);
+  -webkit-backdrop-filter: blur(36px) saturate(220%);
+  border: 1px solid var(--border);
+  box-shadow: 
+    0 28px 65px -15px rgba(0, 0, 0, 0.25),
+    0 10px 25px -5px rgba(0, 0, 0, 0.12),
+    inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.9);
+  border-radius: 9999px;
+  cursor: grab;
+}
+html.dark .draggable-dock {
+  box-shadow: 
+    0 32px 75px -15px rgba(0, 0, 0, 0.8),
+    0 12px 30px -5px rgba(0, 0, 0, 0.5),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.35);
+}
+.draggable-dock:active {
+  cursor: grabbing;
+}
+
+/* Ambient Luminous Aurora Orbs */
+.ambient-container {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ambient-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(120px);
+  opacity: 0.38;
+  mix-blend-mode: normal;
+  will-change: transform;
+}
+
+html.dark .ambient-orb {
+  opacity: 0.25;
+}
+
+.orb-blue {
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, #38bdf8 0%, rgba(56, 189, 248, 0) 70%);
+  top: -150px;
+  left: 8%;
+  animation: orbDrift1 22s ease-in-out infinite alternate;
+}
+
+.orb-purple {
+  width: 700px;
+  height: 700px;
+  background: radial-gradient(circle, #a855f7 0%, rgba(168, 85, 247, 0) 70%);
+  top: 25%;
+  right: -120px;
+  animation: orbDrift2 26s ease-in-out infinite alternate;
+}
+
+.orb-amber {
+  width: 550px;
+  height: 550px;
+  background: radial-gradient(circle, #f59e0b 0%, rgba(245, 158, 11, 0) 70%);
+  bottom: -120px;
+  left: 20%;
+  animation: orbDrift3 20s ease-in-out infinite alternate;
+}
+
+@keyframes orbDrift1 {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(70px, 50px) scale(1.1); }
+  100% { transform: translate(-40px, 80px) scale(0.95); }
+}
+
+@keyframes orbDrift2 {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-80px, -60px) scale(1.15); }
+  100% { transform: translate(50px, 70px) scale(0.9); }
+}
+
+@keyframes orbDrift3 {
+  0% { transform: translate(0, 0) scale(0.95); }
+  50% { transform: translate(60px, -70px) scale(1.08); }
+  100% { transform: translate(-50px, 40px) scale(1); }
+}
+
+/* ==========================================================================
+   One Piece Poster Fling & 3D Keynote Perspective
+   ========================================================================== */
+
+.perspective-1200 {
+  perspective: 1200px;
+  perspective-origin: center;
+}
+
+.card-flip-inner {
+  transform-style: preserve-3d;
+  transition: transform 0.65s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* One Piece Bounty / Feeder Seal Stamp */
+.onepiece-seal {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 2px 8px;
+  font-family: "Outfit", sans-serif;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-radius: 6px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.9), rgba(217, 119, 6, 0.9));
+  color: white;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+  pointer-events: none;
+  z-index: 20;
+}
+
+/* Holographic Laser Sweep Effect */
+@keyframes laserSweep {
+  0% { transform: translateX(-100%) rotate(25deg); opacity: 0; }
+  50% { opacity: 0.6; }
+  100% { transform: translateX(200%) rotate(25deg); opacity: 0; }
+}
+
+.laser-shimmer {
+  position: absolute;
+  inset: -100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  animation: laserSweep 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Table styles */
+.apple-table-head th {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.apple-table-cell {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+}
+
+/* One Piece Conqueror's Haki Lightning (覇気) */
+@keyframes hakiLightning {
+  0% { opacity: 0; transform: scale(0.97); }
+  25% { opacity: 1; transform: scale(1.02); filter: drop-shadow(0 0 10px #f59e0b) drop-shadow(0 0 20px #ef4444); }
+  50% { opacity: 0.3; transform: scale(0.99); }
+  75% { opacity: 0.9; transform: scale(1.03); filter: drop-shadow(0 0 12px #38bdf8); }
+  100% { opacity: 0; transform: scale(1); }
+}
+
+.haki-spark {
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  border: 2px dashed rgba(245, 158, 11, 0.7);
+  box-shadow: 0 0 25px rgba(245, 158, 11, 0.45), inset 0 0 15px rgba(239, 68, 68, 0.25);
+  pointer-events: none;
+  animation: hakiLightning 1.4s ease-in-out infinite;
+  z-index: 30;
+}
+
+/* Manga Impact "DON!!" (ドン!!) badge */
+.manga-don {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  font-size: 10px;
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  color: white;
+  padding: 2px 7px;
+  border-radius: 4px;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.5);
+  text-transform: uppercase;
+  transform: rotate(-3deg);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* One Piece Bounty Card Frame */
+.onepiece-bounty-card {
+  border: 1px solid rgba(245, 158, 11, 0.5) !important;
+  box-shadow: 
+    0 24px 50px -12px rgba(0, 0, 0, 0.2),
+    0 0 25px rgba(245, 158, 11, 0.2),
+    inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.9) !important;
+}
+html.dark .onepiece-bounty-card {
+  border: 1px solid rgba(245, 158, 11, 0.4) !important;
+  box-shadow: 
+    0 32px 70px -15px rgba(0, 0, 0, 0.9),
+    0 0 30px rgba(245, 158, 11, 0.22),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Lusion.co Style Ultra-Deep Ambient Glow & Hairline Specular Borders */
+.lusion-card {
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 
+    0 20px 45px -15px rgba(15, 23, 42, 0.1),
+    0 0 30px rgba(56, 189, 248, 0.08),
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.95);
+}
+html.dark .lusion-card {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 
+    0 28px 65px -15px rgba(0, 0, 0, 0.88),
+    0 0 35px rgba(56, 189, 248, 0.08),
+    inset 0 1px 1px rgba(255, 255, 255, 0.25);
+}
+
+/* Accessibility: Reduced Motion & Transparency */
+@media (prefers-reduced-motion: reduce) {
+  .pressable:active { transform: none; transition: none; }
+  .liquid-glass-card:hover { transform: none; }
+  .ambient-orb { animation: none !important; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .liquid-glass, .liquid-glass-card, .chrome-header, .glass-pill, .draggable-dock {
+    background: var(--panel-solid) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}

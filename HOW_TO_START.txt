@@ -1,0 +1,48 @@
+﻿+====================================================================+
+|         SMART ENERGY DASHBOARD — HOW TO START (30 seconds)         |
++====================================================================+
+
+FOR THE OPERATOR — NO TECH NEEDED
+
+1. LOOK AT YOUR DESKTOP — find the icon named:
+      Smart Energy Dashboard
+   It has a blue power-plant icon (from PowerStudio).
+
+2. DOUBLE-CLICK that icon — just double-click once.
+
+3. WAIT 5 SECONDS — the dashboard will open by itself in your
+   web browser (Chrome/Edge). You will see:
+      - Top: PLANT TOTAL kW / kWh / PF + system status
+      - Middle: 8 METER CARDS (Main, Floor1, DG...) with live numbers
+      - Click MC tab to see all MC variables from PowerStudio
+
+4. DONE! Leave the browser open. The dashboard updates every 3 seconds
+   automatically. You do NOT need to press anything else.
+
+   If the browser did not open:
+     -> Double-click the second icon:  Dashboard (browser only)
+     -> Or open Chrome and type:  http://127.0.0.1:8000
+
+5. TO CLOSE: just close the browser. The dashboard keeps running
+   in background and will start again when you restart the PC
+   (it is in Startup — autostart).
+
++--------------------------------------------------------------------+
+| TROUBLE?                                                          |
++--------------------------------------------------------------------+
+- Black screen?  Wait 10 sec and double-click again.
+- Still not?  Double-click:  C:\Users\User\Downloads\Dashboard\START HERE - Double Click Me.bat
+            (it shows a green message and opens the dashboard)
+- Need help?  Send the file:  C:\Users\User\Downloads\Dashboard\backend\logs\app.log
+            and tell us what you see when you open http://127.0.0.1:8000/health
+
++--------------------------------------------------------------------+
+| FOR TECH (only once):                                             |
++--------------------------------------------------------------------+
+- Files are in:  C:\Users\User\Downloads\Dashboard\
+- Config:  backend\config.yaml  (meter names, CT/PT)
+- Service (autostart on boot):  scripts\install-service.ps1  (Run as Admin)
+- Firewall:  scripts\secure-firewall.ps1  (Run as Admin)
+- Need real meters?  Plug Ethernet to 10.1.156.0/24 switch, then Test-NetConnection 10.1.156.12 -Port 502 should be True
+
+Made for DESKTOP-1S9DK50  —  2026-09-20  —  see OPS.md for full ops

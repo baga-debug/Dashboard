@@ -1,0 +1,99 @@
+# Dashboard config — edit here or override via backend/.env
+# Portable: copy this file + .env to prod server, no code change.
+
+gateway:
+  host: "10.1.156.12"
+  port: 502
+  timeout_ms: 800          # per-slave request timeout
+  poll_ms: 3000            # full cycle interval
+  keepalive_s: 15
+  retries: 2
+  circuit_break_ms: 30000  # isolate failing slave 30s
+  enabled: true
+
+# 8 slaves — name/model/group editable, ct/pt default 1.0 (direct)
+slaves:
+  - id: 31
+    name: "Main Incomer"
+    model: "CVM-C11"
+    group: "Main"
+    ct_ratio: 1.0
+    pt_ratio: 1.0
+  - id: 32
+    name: "Floor1 A"
+    model: "CVM-C4"
+    group: "Floor1"
+    ct_ratio: 1.0
+    pt_ratio: 1.0
+  - id: 33
+    name: "DG"
+    model: "NRG96"
+    group: "DG"
+    ct_ratio: 1.0
+    pt_ratio: 1.0
+  - id: 11
+    name: "Feeder A"
+    model: "EL LG6435"
+    group: "Floor1"
+    ct_ratio: 1.0
+    pt_ratio: 1.0
+  - id: 12
+    name: "Feeder B"
+    model: "EL LG6435"
+    group: "Floor1"
+    ct_ratio: 1.0
+    pt_ratio: 1.0
+  - id: 13
+    name: "Feeder C"
+    model: "CVM-C11"
+    group: "Main"
+    ct_ratio: 1.0
+    pt_ratio: 1.0
+  - id: 16
+    name: "Spare 16"
+    model: "EL LG6435"
+    group: "Spare"
+    ct_ratio: 1.0
+    pt_ratio: 1.0
+  - id: 19
+    name: "Spare 19"
+    model: "EL LG6435"
+    group: "Spare"
+    ct_ratio: 1.0
+    pt_ratio: 1.0
+
+powerstudio:
+  host: "127.0.0.1"
+  port: 80
+  enabled: true
+  poll_ms: 5000
+  base_path: "/services/user"
+
+groups:
+  - "Main"
+  - "Floor1"
+  - "DG"
+  - "Spare"
+
+poll:
+  # if gateway unreachable, simulator provides identical API shape
+  simulator_enabled: true
+
+security:
+  # API key — set via .env DASHBOARD_API_KEY, empty = open (dev), set = enforced
+  api_key: ""
+  cors_origins:
+    - "http://localhost:5173"
+    - "http://127.0.0.1:5173"
+    - "http://localhost:8000"
+    - "http://127.0.0.1:8000"
+  rate_limit_per_min: 60
+
+storage:
+  db_path: "data/dashboard.db"
+  retention_days: 90
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+  log_level: "info"

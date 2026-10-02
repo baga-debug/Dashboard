@@ -1,0 +1,16 @@
+services:
+  smart-energy-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: srmist-energy-dashboard
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/data:/app/backend/data
+      - ./backend/logs:/app/backend/logs
+      - ./backend/config.yaml:/app/backend/config.yaml:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PORT=8000
