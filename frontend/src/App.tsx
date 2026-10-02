@@ -525,22 +525,24 @@ function RealTimePhaseBalanceMatrix({
 function ExecutiveSpotlightFling({
   show,
   onDismiss,
-  data
+  data,
+  isOnline = true
 }: {
   show: boolean
   onDismiss: () => void
   data?: any
+  isOnline?: boolean
 }) {
   if (!show) return null
 
-  const kwh = data?.kwh ?? 18774401.0
-  const kw = data?.kw ?? 3744.0
-  const pf = data?.pf ?? 0.970
-  const kva = data?.kva ?? (kw / (pf > 0.1 ? pf : 0.985))
-  const rawVll = data?.v_ll ?? (data?.v ? (data.v > 20000 ? data.v : data.v * 1.73205) : 32769.4)
-  const displayVll = rawVll >= 1000 ? `${fmtDec(rawVll / 1000, 1)} kV` : `${fmtDec(rawVll, 1)} V`
-  const i = data?.i ?? 67.5
-  const hz = data?.hz ?? 50.0
+  const kwh = isOnline && data?.kwh ? Number(data.kwh) : 0
+  const kw = isOnline && data?.kw ? Number(data.kw) : 0
+  const pf = isOnline && data?.pf ? Number(data.pf) : 0
+  const kva = isOnline && (data?.kva || (kw && pf ? kw / pf : 0)) ? Number(data?.kva || (kw && pf ? kw / pf : 0)) : 0
+  const rawVll = isOnline ? (data?.v_ll ?? (data?.v ? (data.v > 20000 ? data.v : data.v * 1.73205) : 0)) : 0
+  const displayVll = isOnline && rawVll > 0 ? (rawVll >= 1000 ? `${fmtDec(rawVll / 1000, 1)} kV` : `${fmtDec(rawVll, 1)} V`) : "0 V"
+  const i = isOnline && data?.i ? Number(data.i) : 0
+  const hz = isOnline && data?.hz ? Number(data.hz) : 0
 
   return (
     <AnimatePresence>
@@ -661,6 +663,7 @@ interface InspectedData {
   hz?: number
   status?: string
   ts?: string
+  isOnline?: boolean
 }
 
 function ExpandedMeterInspector({
@@ -675,45 +678,48 @@ function ExpandedMeterInspector({
   const [dockLeft, setDockLeft] = useState(false)
   if (!data) return null
 
-  const kwh = data.kwh ?? 0
-  const kw = data.kw ?? 0
-  const pf = data.pf ?? 0.985
-  const kva = data.kva ?? (kw / (pf > 0.1 ? pf : 0.985))
-  const kvar = data.kvar ?? Math.round(Math.sqrt(Math.max(0, kva * kva - kw * kw)) * 10) / 10
+  const isOnline = data.isOnline ?? true
+  const kwh = isOnline ? (data.kwh ?? 0) : 0
+  const kw = isOnline ? (data.kw ?? 0) : 0
+  const pf = isOnline ? (data.pf ?? 0) : 0
+  const kva = isOnline ? (data.kva ?? (kw > 0 && pf > 0.1 ? (kw / pf) : 0)) : 0
+  const kvar = isOnline ? (data.kvar ?? (kva > 0 && kw > 0 ? Math.round(Math.sqrt(Math.max(0, kva * kva - kw * kw)) * 10) / 10 : 0)) : 0
 
-  const rawVll = data.v_ll ?? (data.v ? (data.v > 20000 ? data.v : (data.v > 8000 ? data.v : (data.v > 300 ? data.v : data.v * 1.73205))) : 415.0)
-  const displayVll = rawVll >= 1000 ? `${fmtDec(rawVll / 1000, 1)} kV` : `${fmtDec(rawVll, 1)} V`
-  const rawVln = data.v_ln ?? (rawVll / 1.73205)
-  const displayVln = rawVln >= 1000 ? `${fmtDec(rawVln / 1000, 1)} kV` : `${fmtDec(rawVln, 1)} V`
+  const rawVll = isOnline ? (data.v_ll ?? (data.v ? (data.v > 20000 ? data.v : (data.v > 8000 ? data.v : (data.v > 300 ? data.v : data.v * 1.73205))) : 0)) : 0
+  const displayVll = isOnline && rawVll > 0 ? (rawVll >= 1000 ? `${fmtDec(rawVll / 1000, 1)} kV` : `${fmtDec(rawVll, 1)} V`) : "0 V"
+  const rawVln = isOnline ? (data.v_ln ?? (rawVll / 1.73205)) : 0
+  const displayVln = isOnline && rawVln > 0 ? (rawVln >= 1000 ? `${fmtDec(rawVln / 1000, 1)} kV` : `${fmtDec(rawVln, 1)} V`) : "0 V"
 
-  const i = data.i ?? 145.2
-  const i1 = data.i1 ?? i * 1.01
-  const i2 = data.i2 ?? i * 0.99
-  const i3 = data.i3 ?? i * 1.00
-  const hz = data.hz ?? 50.0
+  const i = isOnline ? (data.i ?? 0) : 0
+  const i1 = isOnline ? (data.i1 ?? i) : 0
+  const i2 = isOnline ? (data.i2 ?? i) : 0
+  const i3 = isOnline ? (data.i3 ?? i) : 0
+  const hz = isOnline ? (data.hz ?? (i > 0 || rawVll > 0 ? 50.0 : 0)) : 0
 
-  // Smart prominent metric: if kWh is 0, show Voltage, Current, or Active Power
-  let mainLabel = "Active Energy"
-  let mainVal = fmtDec(kwh, 0)
-  let mainUnit = "kWh"
-  let mainColor = "text-amber-500"
+  // Smart prominent metric: if offline or kWh is 0, display 0 / OFFLINE
+  let mainLabel = isOnline ? "Active Energy" : "Telemetry Status"
+  let mainVal = isOnline ? fmtDec(kwh, 0) : "0"
+  let mainUnit = isOnline ? "kWh" : "OFFLINE"
+  let mainColor = isOnline ? "text-amber-500" : "text-rose-500"
 
-  if (!kwh || kwh === 0) {
-    if (kw > 0) {
-      mainLabel = "Active Power"
-      mainVal = fmtDec(kw, 1)
-      mainUnit = "kW"
-      mainColor = "text-amber-500"
-    } else if (rawVll > 0) {
-      mainLabel = "Phase-Phase Voltage"
-      mainVal = rawVll >= 1000 ? fmtDec(rawVll / 1000, 1) : fmtDec(rawVll, 1)
-      mainUnit = rawVll >= 1000 ? "kV" : "V"
-      mainColor = "text-sky-500"
-    } else if (i > 0) {
-      mainLabel = "Grid Current"
-      mainVal = fmtDec(i, 1)
-      mainUnit = "A"
-      mainColor = "text-emerald-500"
+  if (isOnline) {
+    if (!kwh || kwh === 0) {
+      if (kw > 0) {
+        mainLabel = "Active Power"
+        mainVal = fmtDec(kw, 1)
+        mainUnit = "kW"
+        mainColor = "text-amber-500"
+      } else if (rawVll > 0) {
+        mainLabel = "Phase-Phase Voltage"
+        mainVal = rawVll >= 1000 ? fmtDec(rawVll / 1000, 1) : fmtDec(rawVll, 1)
+        mainUnit = rawVll >= 1000 ? "kV" : "V"
+        mainColor = "text-sky-500"
+      } else if (i > 0) {
+        mainLabel = "Grid Current"
+        mainVal = fmtDec(i, 1)
+        mainUnit = "A"
+        mainColor = "text-emerald-500"
+      }
     }
   }
 
@@ -736,28 +742,28 @@ function ExpandedMeterInspector({
           }`}
         >
           {/* Top Bar with Dock Toggle & Close */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-slate-50 dark:bg-white/5">
-            <div className="flex items-center gap-2.5">
-              <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
-              <div>
-                <h2 className="font-display font-black text-xl tracking-tight text-foreground flex items-center gap-2">
-                  {data.label}
+          <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-border bg-slate-50 dark:bg-white/5">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className={`w-3 h-3 rounded-full shrink-0 ${isOnline ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`} />
+              <div className="min-w-0">
+                <h2 className="font-display font-black text-lg sm:text-xl tracking-tight text-foreground flex items-center gap-2 truncate">
+                  <span className="truncate">{data.label}</span>
                   {data.group && (
-                    <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/25">
+                    <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/25 shrink-0">
                       {data.group}
                     </span>
                   )}
                 </h2>
-                <p className="text-[11px] font-bold text-muted mt-0.5">
+                <p className="text-[11px] font-bold text-muted mt-0.5 truncate">
                   {data.sub || `${data.model || "CVM-C11"} · Meter #${data.meter_id || "—"}`}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={() => setDockLeft(!dockLeft)}
-                className="px-2.5 py-1 rounded-lg border border-border bg-white dark:bg-white/10 text-[11px] font-bold text-muted hover:text-foreground transition-all flex items-center gap-1"
+                className="hidden sm:inline-flex px-2.5 py-1 rounded-lg border border-border bg-white dark:bg-white/10 text-[11px] font-bold text-muted hover:text-foreground transition-all items-center gap-1"
                 title={dockLeft ? "Switch to center modal" : "Dock to left side"}
               >
                 {dockLeft ? "◨ Center" : "◧ Dock Left"}
@@ -772,19 +778,23 @@ function ExpandedMeterInspector({
           </div>
 
           {/* Scrollable Content Body */}
-          <div className="p-6 overflow-y-auto space-y-4">
+          <div className="p-4 sm:p-6 overflow-y-auto space-y-4">
             {/* Prominent Smart Metric Plaque */}
             <div className="p-4 rounded-2xl bg-slate-100 dark:bg-white/5 border border-border text-center">
               <span className="text-[10px] font-extrabold uppercase tracking-widest text-muted block">
                 {mainLabel}
               </span>
-              <div className="display-num text-4xl sm:text-5xl font-black text-foreground tracking-tight mt-1 flex items-baseline justify-center gap-2">
+              <div className="display-num text-3xl sm:text-5xl font-black text-foreground tracking-tight mt-1 flex items-baseline justify-center gap-2">
                 <span className={mainColor}>{mainVal}</span>
-                <span className="text-xl font-extrabold text-foreground">{mainUnit}</span>
+                <span className="text-lg sm:text-xl font-extrabold text-foreground">{mainUnit}</span>
               </div>
-              <div className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-1 flex items-center justify-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                POWERSTUDIO SCADA CERTIFIED TELEMETRY · HIGH PRECISION
+              <div className={`text-[10.5px] sm:text-[11px] font-bold mt-1 flex items-center justify-center gap-1.5 ${
+                isOnline ? "text-emerald-600 dark:text-emerald-400" : "text-rose-500"
+              }`}>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${isOnline ? "bg-emerald-500" : "bg-rose-500 animate-ping"}`} />
+                {isOnline
+                  ? "POWERSTUDIO SCADA CERTIFIED TELEMETRY · HIGH PRECISION"
+                  : "STREAM OFFLINE · NO SCADA RESPONSE · READINGS SET TO 0"}
               </div>
             </div>
 
@@ -847,11 +857,19 @@ function ExpandedMeterInspector({
             </div>
 
             {/* Hardware & Sync Metadata */}
-            <div className="p-3 rounded-xl bg-slate-100 dark:bg-white/5 border border-border text-[11px] grid grid-cols-2 gap-2 text-muted">
+            <div className="p-3 rounded-xl bg-slate-100 dark:bg-white/5 border border-border text-[11px] grid grid-cols-1 sm:grid-cols-2 gap-2 text-muted">
               <div><span className="font-bold">Hardware Model:</span> {data.model || "CVM-C11 / Class 0.2S"}</div>
               <div><span className="font-bold">Modbus Address:</span> #{data.meter_id || "31"}</div>
-              <div><span className="font-bold">Status:</span> <span className="text-emerald-500 font-bold">Online · Live Sync</span></div>
-              <div><span className="font-bold">Last Sync:</span> {data.ts ? new Date(data.ts).toLocaleTimeString() : "Live Now"}</div>
+              <div>
+                <span className="font-bold">Status:</span>{" "}
+                <span className={isOnline ? "text-emerald-500 font-bold" : "text-rose-500 font-bold"}>
+                  {isOnline ? "Online · Live Sync" : "Disconnected · Offline (0 V / 0 A)"}
+                </span>
+              </div>
+              <div>
+                <span className="font-bold">Last Sync:</span>{" "}
+                {isOnline && data.ts ? new Date(data.ts).toLocaleTimeString() : "No telemetry feed"}
+              </div>
             </div>
           </div>
         </motion.div>
@@ -871,20 +889,21 @@ function FeederBox({
   kva,
   v,
   v_ll,
-  i = 145.2,
+  i,
   i1,
   i2,
   i3,
-  pf = 0.985,
-  hz = 50.0,
+  pf,
+  hz,
   main,
   badge,
+  isOnline = true,
   onClick
 }: {
   label: string
   sub: string
   kwh?: any
-  kw: any
+  kw?: any
   kva?: any
   v?: any
   v_ll?: any
@@ -897,50 +916,62 @@ function FeederBox({
   main?: boolean
   badge?: string
   index?: number
+  isOnline?: boolean
   onClick?: () => void
 }) {
   const [isJumping, setIsJumping] = useState(false)
-  const effectiveI1 = i1 !== undefined ? i1 : (i ? i * 1.01 : 146.5)
-  const effectiveI2 = i2 !== undefined ? i2 : (i ? i * 0.99 : 144.2)
-  const effectiveI3 = i3 !== undefined ? i3 : (i ? i * 1.00 : 145.2)
+
+  // Enforce strict zero state when offline - NO DEMO FALLBACK
+  const effectiveKw = isOnline && kw !== undefined && kw !== null ? Number(kw) : 0
+  const effectiveKwh = isOnline && kwh !== undefined && kwh !== null ? Number(kwh) : 0
+  const effectivePf = isOnline && pf !== undefined && pf !== null ? Number(pf) : 0
+  const effectiveHz = isOnline && hz !== undefined && hz !== null ? Number(hz) : 0
+  const effectiveI = isOnline && i !== undefined && i !== null ? Number(i) : 0
+  const effectiveI1 = isOnline && i1 !== undefined && i1 !== null ? Number(i1) : effectiveI
+  const effectiveI2 = isOnline && i2 !== undefined && i2 !== null ? Number(i2) : effectiveI
+  const effectiveI3 = isOnline && i3 !== undefined && i3 !== null ? Number(i3) : effectiveI
 
   // Apparent Power (kVA): S = P / PF
-  const effectiveKva = kva !== undefined && kva !== null
-    ? kva
-    : (kw ? (kw / (pf && pf > 0.1 ? pf : 0.985)) : 0)
+  const effectiveKva = isOnline
+    ? (kva !== undefined && kva !== null
+        ? Number(kva)
+        : (effectiveKw > 0 ? effectiveKw / (effectivePf > 0.1 ? effectivePf : 0.985) : 0))
+    : 0
 
   // Phase-to-Phase Voltage (VLL) calculation
-  const rawVll = v_ll !== undefined && v_ll !== null
-    ? v_ll
-    : (v ? (v > 20000 ? v : (v > 8000 ? v : (v > 300 ? v : v * 1.73205))) : 415.0)
-  const displayVll = rawVll >= 1000
-    ? `${fmtDec(rawVll / 1000, 1)} kV`
-    : `${fmtDec(rawVll, 1)} V`
+  const rawVll = isOnline
+    ? (v_ll !== undefined && v_ll !== null
+        ? Number(v_ll)
+        : (v ? (v > 20000 ? v : (v > 8000 ? v : (v > 300 ? v : v * 1.73205))) : 0))
+    : 0
+  const displayVll = isOnline && rawVll > 0
+    ? (rawVll >= 1000 ? `${fmtDec(rawVll / 1000, 1)} kV` : `${fmtDec(rawVll, 1)} V`)
+    : "0 V"
 
-  const effectiveKwh = kwh !== undefined && kwh !== null ? kwh : 0
+  // Smart primary metric selection: if offline, display 0 / INVALID
+  let primaryLabel = isOnline ? "Active Energy" : "Telemetry Status"
+  let primaryVal = isOnline ? fmtDec(effectiveKwh, 0) : "0"
+  let primaryUnit = isOnline ? "kWh" : "OFFLINE"
+  let primaryColor = isOnline ? "text-amber-500" : "text-rose-500"
 
-  // Smart primary metric selection: if kWh is 0, display Voltage, Current, or kW
-  let primaryLabel = "Active Energy"
-  let primaryVal = fmtDec(effectiveKwh, 0)
-  let primaryUnit = "kWh"
-  let primaryColor = "text-amber-500"
-
-  if (!effectiveKwh || effectiveKwh === 0) {
-    if (kw && kw > 0) {
-      primaryLabel = "Active Power"
-      primaryVal = fmtDec(kw, 1)
-      primaryUnit = "kW"
-      primaryColor = "text-amber-500"
-    } else if (rawVll && rawVll > 0) {
-      primaryLabel = "Voltage (Phase-Phase)"
-      primaryVal = rawVll >= 1000 ? fmtDec(rawVll / 1000, 1) : fmtDec(rawVll, 1)
-      primaryUnit = rawVll >= 1000 ? "kV" : "V"
-      primaryColor = "text-sky-500"
-    } else if (i && i > 0) {
-      primaryLabel = "Load Current"
-      primaryVal = fmtDec(i, 1)
-      primaryUnit = "A"
-      primaryColor = "text-emerald-500"
+  if (isOnline) {
+    if (!effectiveKwh || effectiveKwh === 0) {
+      if (effectiveKw > 0) {
+        primaryLabel = "Active Power"
+        primaryVal = fmtDec(effectiveKw, 1)
+        primaryUnit = "kW"
+        primaryColor = "text-amber-500"
+      } else if (rawVll > 0) {
+        primaryLabel = "Voltage (Phase-Phase)"
+        primaryVal = rawVll >= 1000 ? fmtDec(rawVll / 1000, 1) : fmtDec(rawVll, 1)
+        primaryUnit = rawVll >= 1000 ? "kV" : "V"
+        primaryColor = "text-sky-500"
+      } else if (effectiveI > 0) {
+        primaryLabel = "Load Current"
+        primaryVal = fmtDec(effectiveI, 1)
+        primaryUnit = "A"
+        primaryColor = "text-emerald-500"
+      }
     }
   }
 
@@ -976,17 +1007,23 @@ function FeederBox({
       }
       whileHover={isJumping ? {} : { y: -4, scale: 1.015 }}
       style={{ transformPerspective: 1000, transformStyle: "preserve-3d" }}
-      className={`relative p-4 rounded-2xl liquid-glass-card select-none flex flex-col justify-between cursor-pointer ${
+      className={`relative p-3.5 sm:p-4 rounded-2xl liquid-glass-card select-none flex flex-col justify-between cursor-pointer ${
         main ? "onepiece-bounty-card" : "lusion-card"
       }`}
       title={main ? "Click for 33kV Main Incomer One Piece Spotlight Fling!" : "Click to flip and inspect full specs & 3-phase analysis"}
     >
       {/* Top Header */}
       <div className="flex items-center justify-between gap-1.5 border-b border-border/70 pb-2">
-        <div className="flex items-center gap-2">
-          <span className={`w-2.5 h-2.5 rounded-full ${main ? "bg-amber-500 animate-pulse" : "bg-emerald-500"}`} />
-          <div>
-            <span className="font-display font-extrabold text-[13px] tracking-tight text-foreground block leading-tight">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+            !isOnline 
+              ? "bg-rose-500" 
+              : main 
+                ? "bg-amber-500 animate-pulse" 
+                : "bg-emerald-500"
+          }`} />
+          <div className="min-w-0">
+            <span className="font-display font-extrabold text-[13px] tracking-tight text-foreground block leading-tight truncate">
               {label}
             </span>
             <span className="text-[10px] text-muted font-medium truncate block max-w-[130px]">
@@ -996,7 +1033,11 @@ function FeederBox({
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          {main ? (
+          {!isOnline ? (
+            <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-md uppercase bg-rose-500/15 text-rose-500 border border-rose-500/30 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" /> OFFLINE
+            </span>
+          ) : main ? (
             <span className="text-[9.5px] font-black px-2 py-0.5 rounded-md uppercase bg-amber-500/20 text-amber-500 border border-amber-500/30 flex items-center gap-1">
               <Sparkles className="w-2.5 h-2.5 fill-amber-500" /> ★ MAIN 33kV
             </span>
@@ -1005,7 +1046,7 @@ function FeederBox({
               {badge}
             </span>
           ) : (
-            <span className="text-[9px] font-bold text-muted uppercase tracking-wider">
+            <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-wider">
               ONLINE
             </span>
           )}
@@ -1018,10 +1059,10 @@ function FeederBox({
           {primaryLabel}
         </div>
         <div className="flex items-baseline gap-1.5 mt-0.5">
-          <span className="display-num text-[23px] sm:text-[26px] font-black text-foreground tracking-tight">
+          <span className="display-num text-[22px] sm:text-[26px] font-black text-foreground tracking-tight break-all">
             {primaryVal}
           </span>
-          <span className={`text-[13px] font-extrabold ${primaryColor}`}>{primaryUnit}</span>
+          <span className={`text-[12px] sm:text-[13px] font-extrabold ${primaryColor}`}>{primaryUnit}</span>
         </div>
       </div>
 
@@ -1030,14 +1071,14 @@ function FeederBox({
         <div className="p-1.5 rounded-lg bg-black/5 dark:bg-white/5">
           <div className="text-[8.5px] uppercase font-bold text-muted">Active Power</div>
           <div className="mono-num font-bold text-amber-600 dark:text-amber-400">
-            {kw !== undefined && kw !== null ? `${fmtDec(kw, 1)} kW` : "—"}
+            {isOnline && effectiveKw > 0 ? `${fmtDec(effectiveKw, 1)} kW` : "0 kW"}
           </div>
         </div>
 
         <div className="p-1.5 rounded-lg bg-black/5 dark:bg-white/5">
           <div className="text-[8.5px] uppercase font-bold text-muted">Apparent Power</div>
           <div className="mono-num font-bold text-sky-600 dark:text-sky-400">
-            {effectiveKva ? `${fmtDec(effectiveKva, 1)} kVA` : "—"}
+            {isOnline && effectiveKva > 0 ? `${fmtDec(effectiveKva, 1)} kVA` : "0 kVA"}
           </div>
         </div>
 
@@ -1051,17 +1092,21 @@ function FeederBox({
         <div className="p-1.5 rounded-lg bg-black/5 dark:bg-white/5">
           <div className="text-[8.5px] uppercase font-bold text-muted">Avg Current</div>
           <div className="mono-num font-bold text-foreground">
-            {i ? `${fmtDec(i, 1)} A` : "145.2 A"}
+            {isOnline && effectiveI > 0 ? `${fmtDec(effectiveI, 1)} A` : "0 A"}
           </div>
         </div>
 
         <div className="col-span-2 p-1.5 rounded-lg bg-black/5 dark:bg-white/5">
           <div className="flex items-center justify-between text-[8.5px] uppercase font-bold text-muted">
             <span>Phase Amps L1 · L2 · L3</span>
-            <span className="text-emerald-500 font-bold">BALANCED</span>
+            <span className={isOnline ? "text-emerald-500 font-bold" : "text-rose-500 font-bold"}>
+              {isOnline ? "BALANCED" : "DISCONNECTED"}
+            </span>
           </div>
           <div className="mono-num text-[10px] font-bold text-foreground mt-0.5">
-            {fmtDec(effectiveI1, 1)} · {fmtDec(effectiveI2, 1)} · {fmtDec(effectiveI3, 1)} A
+            {isOnline && effectiveI > 0
+              ? `${fmtDec(effectiveI1, 1)} · ${fmtDec(effectiveI2, 1)} · ${fmtDec(effectiveI3, 1)} A`
+              : "0.0 · 0.0 · 0.0 A"}
           </div>
         </div>
 
@@ -1069,13 +1114,13 @@ function FeederBox({
           <div className="flex items-center gap-1.5">
             <span className="text-[9px] font-bold text-muted">PF:</span>
             <span className="mono-num font-bold text-emerald-500">
-              {pf ? fmtDec(pf, 3) : "0.985"}
+              {isOnline && effectivePf > 0 ? fmtDec(effectivePf, 3) : "0.000"}
             </span>
           </div>
           <div className="flex items-center gap-1">
             <span className="text-[9px] font-bold text-muted">FREQ:</span>
             <span className="mono-num font-bold text-foreground">
-              {hz ? `${fmtDec(hz, 1)}Hz` : "50.0Hz"}
+              {isOnline && effectiveHz > 0 ? `${fmtDec(effectiveHz, 1)}Hz` : "0.0Hz"}
             </span>
           </div>
         </div>
@@ -1122,34 +1167,13 @@ function useLive() {
         setErr(null)
         appendHistory(j.meters)
       } catch {
-        // Fallback mock layer for static Vercel preview deployment
-        setLive(prev => {
-          if (prev) return prev
-          return {
-            ts: new Date().toISOString(),
-            combined: { kw: 6428.9, kwh: 18774401.0, pf: 0.985, active: 150, stale_count: 0, source: "powerstudio" },
-            meters: [
-              { meter_id: 31, name: "33-INCOMER", model: "CVM-C11", group: "33", kw: 3744.0, kwh_import: 18774401.0, v_ll_avg: 32769.4, v_ln_avg: 18920.0, i_avg: 67.5, pf: 0.970, hz: 50.0, status: "online" },
-              { meter_id: 32, name: "33-IN-TR-1", model: "CVM-C11", group: "33", kw: 1893.0, kwh_import: 5834596.5, v_ll_avg: 32822.8, v_ln_avg: 18950.8, i_avg: 33.9, pf: 0.980, hz: 50.0, status: "online" },
-              { meter_id: 33, name: "33-IN-TR-2", model: "CVM-C11", group: "33", kw: 1921.0, kwh_import: 455372.4, v_ll_avg: 32808.8, v_ln_avg: 18942.8, i_avg: 34.5, pf: 0.980, hz: 50.0, status: "online" },
-              { meter_id: 11, name: "SS-11-TP-1", model: "EL LG6435", group: "SS", kw: 448.0, kwh_import: 5529337.0, v_ll_avg: 11206.0, v_ln_avg: 6470.0, i_avg: 23.9, pf: 0.970, hz: 50.0, status: "online" },
-              { meter_id: 12, name: "SS-11-UB", model: "EL LG6435", group: "SS", kw: 136.0, kwh_import: 3285128.0, v_ll_avg: 11200.3, v_ln_avg: 6466.7, i_avg: 7.2, pf: 0.970, hz: 50.0, status: "online" },
-              { meter_id: 13, name: "SS-11-HOSTEL", model: "EL LG6435", group: "SS", kw: 3176.0, kwh_import: 11553133.0, v_ll_avg: 11211.8, v_ln_avg: 6473.3, i_avg: 166.5, pf: 0.980, hz: 50.0, status: "online" },
-              { meter_id: 19, name: "MC-HTVCB-IN", model: "EL LG6435", group: "MC", kw: 244.0, kwh_import: 499276.0, v_ll_avg: 10767.3, v_ln_avg: 6216.7, i_avg: 13.5, pf: 0.960, hz: 50.0, status: "online" },
-              { meter_id: 2784, name: "MC-SOL-AUTO-200", model: "CVM-C4", group: "MC", kw: 184.2, kwh_import: 561125.0, v_ll_avg: 416.5, v_ln_avg: 240.5, i_avg: 256.0, pf: 0.985, hz: 50.0, status: "online" },
-              { meter_id: 2543, name: "MC-SOL-AERO-2", model: "CVM-C4", group: "MC", kw: 142.0, kwh_import: 1114871.4, v_ll_avg: 417.8, v_ln_avg: 241.2, i_avg: 198.0, pf: 0.985, hz: 50.0, status: "online" },
-              { meter_id: 8136, name: "MC-SOL-AERO100", model: "CVM-C4", group: "MC", kw: 92.0, kwh_import: 421080.0, v_ll_avg: 416.0, v_ln_avg: 240.2, i_avg: 128.0, pf: 0.985, hz: 50.0, status: "online" },
-              { meter_id: 1098, name: "MC-SOL-STRUCT40", model: "CVM-C4", group: "MC", kw: 38.0, kwh_import: 182580.0, v_ll_avg: 416.6, v_ln_avg: 240.5, i_avg: 53.0, pf: 0.985, hz: 50.0, status: "online" },
-              { meter_id: 1144, name: "MC-SOL-MECH-C50", model: "CVM-C4", group: "MC", kw: 48.0, kwh_import: 219400.0, v_ll_avg: 415.5, v_ln_avg: 239.9, i_avg: 67.0, pf: 0.985, hz: 50.0, status: "online" },
-              { meter_id: 7209, name: "MC-SOL-M-HGR100", model: "CVM-C4", group: "MC", kw: 88.0, kwh_import: 395000.0, v_ll_avg: 416.0, v_ln_avg: 240.2, i_avg: 122.0, pf: 0.985, hz: 50.0, status: "online" },
-              { meter_id: 301, name: "MC-CHILL-I", model: "CVM-C11", group: "MC", kw: 185.0, kwh_import: 842000.0, v_ll_avg: 415.0, v_ln_avg: 239.6, i_avg: 258.0, pf: 0.980, hz: 50.0, status: "online" },
-              { meter_id: 302, name: "MC-CHILL-II", model: "CVM-C11", group: "MC", kw: 192.0, kwh_import: 891000.0, v_ll_avg: 415.0, v_ln_avg: 239.6, i_avg: 267.0, pf: 0.980, hz: 50.0, status: "online" },
-              { meter_id: 303, name: "MC-1EB-LT-ACB", model: "CVM-C11", group: "MC", kw: 310.0, kwh_import: 1420000.0, v_ll_avg: 415.0, v_ln_avg: 239.6, i_avg: 432.0, pf: 0.985, hz: 50.0, status: "online" },
-              { meter_id: 304, name: "MC-CIVIL", model: "EL LG6435", group: "MC", kw: 64.0, kwh_import: 298000.0, v_ll_avg: 415.0, v_ln_avg: 239.6, i_avg: 89.0, pf: 0.985, hz: 50.0, status: "online" },
-              { meter_id: 305, name: "MC-CRC1", model: "EL LG6435", group: "MC", kw: 52.0, kwh_import: 241000.0, v_ll_avg: 415.0, v_ln_avg: 239.6, i_avg: 72.0, pf: 0.985, hz: 50.0, status: "online" }
-            ]
-          }
+        // STRICT: Zero / invalid when connection is not there - NO DEMO FALLBACK
+        setLive({
+          ts: "",
+          combined: { kw: 0, kwh: 0, pf: 0, active: 0, stale_count: 0, source: "offline" },
+          meters: []
         })
+        setErr("DISCONNECTED")
       }
     }
 
@@ -1700,7 +1724,7 @@ function CustomCumulativeStudioView({
    Main Application Component
    ========================================================================== */
 export default function App() {
-  const { live, health, history, sseUp } = useLive()
+  const { live, health, err, history, sseUp } = useLive()
   const [inspectedData, setInspectedData] = useState<InspectedData | null>(null)
   const [q, setQ] = useState("")
   const [group, setGroup] = useState<string>("All")
@@ -1913,13 +1937,14 @@ export default function App() {
     return `${Math.floor(diff / 60)}m ${diff % 60}s ago`
   }, [live, time])
 
-  // Electrical Schema Data Resolution
-  const e = elecData
+  // Electrical Schema Data Resolution & Strict Offline Verification (NO DEMO FALLBACK)
+  const isOnline = Boolean(live && !err && live.meters && live.meters.length > 0 && live.combined?.source !== "offline")
+  const e = isOnline ? elecData : null
   const ss = e?.substation_33kv || e?.ss33
 
   // Helper to open inspector with full specs
   const handleInspectFeeder = (fData: InspectedData) => {
-    setInspectedData(fData)
+    setInspectedData({ ...fData, isOnline })
   }
 
   return (
@@ -1942,6 +1967,7 @@ export default function App() {
         show={showSpotlightFling}
         onDismiss={() => setShowSpotlightFling(false)}
         data={ss?.incomer}
+        isOnline={isOnline}
       />
 
       {/* Expanded Meter Specs & 3-Phase Telemetry Inspector */}
@@ -2050,6 +2076,32 @@ export default function App() {
         />
       ) : (
         <main className="max-w-7xl mx-auto px-3 sm:px-6 py-5 space-y-6">
+          {/* OFFLINE / DISCONNECTED WARNING BANNER (STRICT: NO DEMO FALLBACK) */}
+          {!isOnline && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-4 rounded-2xl bg-rose-500/10 border-2 border-rose-500/30 backdrop-blur-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-rose-600 dark:text-rose-400"
+            >
+              <div className="flex items-center gap-3">
+                <span className="w-3 h-3 rounded-full bg-rose-500 animate-ping shrink-0" />
+                <div>
+                  <div className="text-sm font-extrabold uppercase tracking-wide">
+                    Live Telemetry Stream Disconnected · SCADA Offline
+                  </div>
+                  <div className="text-xs font-semibold opacity-90">
+                    Host <span className="mono-num font-mono">172.16.160.49:5222</span> unreachable. All measurements strictly set to 0.00 / INVALID (no synthetic demo fallback).
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                <span className="px-2.5 py-1 rounded-lg bg-rose-500 text-white text-[10px] font-black uppercase tracking-wider shadow-sm">
+                  0 Fallback Active
+                </span>
+              </div>
+            </motion.div>
+          )}
+
           {/* ==================================================================
               1. ORIGINAL ELECTRICAL LAYOUT (NO CUMULATIVE — INDIVIDUAL DATA ONLY)
              ================================================================== */}
@@ -2077,94 +2129,101 @@ export default function App() {
               <FeederBox
                 label="33kV INCOMER"
                 sub="33-INCOMER Main Primary"
-                kwh={ss?.incomer?.kwh ?? 18774401}
-                kw={ss?.incomer?.kw ?? 3744.0}
-                kva={ss?.incomer?.kva ?? 3825.0}
-                v_ll={ss?.incomer?.v_ll ?? 32769.4}
-                i={ss?.incomer?.i ?? 67.5}
-                i1={ss?.incomer?.i1}
-                i2={ss?.incomer?.i2}
-                i3={ss?.incomer?.i3}
-                pf={ss?.incomer?.pf ?? 0.970}
+                kwh={isOnline && ss?.incomer?.kwh ? ss.incomer.kwh : 0}
+                kw={isOnline && ss?.incomer?.kw ? ss.incomer.kw : 0}
+                kva={isOnline && ss?.incomer?.kva ? ss.incomer.kva : 0}
+                v_ll={isOnline && ss?.incomer?.v_ll ? ss.incomer.v_ll : 0}
+                i={isOnline && ss?.incomer?.i ? ss.incomer.i : 0}
+                i1={isOnline ? ss?.incomer?.i1 : 0}
+                i2={isOnline ? ss?.incomer?.i2 : 0}
+                i3={isOnline ? ss?.incomer?.i3 : 0}
+                pf={isOnline && ss?.incomer?.pf ? ss.incomer.pf : 0}
                 main={true}
                 badge="★ GRID PRIMARY"
+                isOnline={isOnline}
                 onClick={() => setShowSpotlightFling(true)}
               />
               <FeederBox
                 label="MC-HTVCB-IN"
                 sub="11kV Main HTVCB Incomer"
-                kwh={e?.htvcb_in?.kwh ?? 499276}
-                kw={e?.htvcb_in?.kw ?? 244.0}
-                kva={e?.htvcb_in?.kva ?? 251.8}
-                v_ll={e?.htvcb_in?.v_ll ?? 10767.3}
-                i={e?.htvcb_in?.i ?? 13.5}
-                i1={e?.htvcb_in?.i1}
-                i2={e?.htvcb_in?.i2}
-                i3={e?.htvcb_in?.i3}
-                pf={e?.htvcb_in?.pf ?? 0.960}
+                kwh={isOnline && e?.htvcb_in?.kwh ? e.htvcb_in.kwh : 0}
+                kw={isOnline && e?.htvcb_in?.kw ? e.htvcb_in.kw : 0}
+                kva={isOnline && e?.htvcb_in?.kva ? e.htvcb_in.kva : 0}
+                v_ll={isOnline && e?.htvcb_in?.v_ll ? e.htvcb_in.v_ll : 0}
+                i={isOnline && e?.htvcb_in?.i ? e.htvcb_in.i : 0}
+                i1={isOnline ? e?.htvcb_in?.i1 : 0}
+                i2={isOnline ? e?.htvcb_in?.i2 : 0}
+                i3={isOnline ? e?.htvcb_in?.i3 : 0}
+                pf={isOnline && e?.htvcb_in?.pf ? e.htvcb_in.pf : 0}
                 badge="High Tension"
+                isOnline={isOnline}
                 onClick={() => handleInspectFeeder({
                   label: "MC-HTVCB-IN",
                   sub: "11kV Main HTVCB Incomer",
-                  kwh: e?.htvcb_in?.kwh ?? 499276,
-                  kw: e?.htvcb_in?.kw ?? 244.0,
-                  kva: e?.htvcb_in?.kva ?? 251.8,
-                  v_ll: e?.htvcb_in?.v_ll ?? 10767.3,
-                  i: e?.htvcb_in?.i ?? 13.5,
-                  pf: e?.htvcb_in?.pf ?? 0.960,
-                  group: "MC"
+                  kwh: isOnline && e?.htvcb_in?.kwh ? e.htvcb_in.kwh : 0,
+                  kw: isOnline && e?.htvcb_in?.kw ? e.htvcb_in.kw : 0,
+                  kva: isOnline && e?.htvcb_in?.kva ? e.htvcb_in.kva : 0,
+                  v_ll: isOnline && e?.htvcb_in?.v_ll ? e.htvcb_in.v_ll : 0,
+                  i: isOnline && e?.htvcb_in?.i ? e.htvcb_in.i : 0,
+                  pf: isOnline && e?.htvcb_in?.pf ? e.htvcb_in.pf : 0,
+                  group: "MC",
+                  isOnline
                 })}
               />
               {/* Individual Solar Main Converter (NO Cumulative Sum) */}
               <FeederBox
                 label={e?.solar_main?.id || "MC-SOL-AUTO-200"}
                 sub="MC Main Solar Inverter"
-                kwh={e?.solar_main?.kwh ?? 561125.0}
-                kw={e?.solar_main?.kw ?? 184.2}
-                kva={e?.solar_main?.kva ?? 187.0}
-                v_ll={e?.solar_main?.v_ll ?? 416.5}
-                i={e?.solar_main?.i ?? 256.0}
-                i1={e?.solar_main?.i1}
-                i2={e?.solar_main?.i2}
-                i3={e?.solar_main?.i3}
-                pf={e?.solar_main?.pf ?? 0.985}
+                kwh={isOnline && e?.solar_main?.kwh ? e.solar_main.kwh : 0}
+                kw={isOnline && e?.solar_main?.kw ? e.solar_main.kw : 0}
+                kva={isOnline && e?.solar_main?.kva ? e.solar_main.kva : 0}
+                v_ll={isOnline && e?.solar_main?.v_ll ? e.solar_main.v_ll : 0}
+                i={isOnline && e?.solar_main?.i ? e.solar_main.i : 0}
+                i1={isOnline ? e?.solar_main?.i1 : 0}
+                i2={isOnline ? e?.solar_main?.i2 : 0}
+                i3={isOnline ? e?.solar_main?.i3 : 0}
+                pf={isOnline && e?.solar_main?.pf ? e.solar_main.pf : 0}
                 badge="Solar Main"
+                isOnline={isOnline}
                 onClick={() => handleInspectFeeder({
                   label: e?.solar_main?.id || "MC-SOL-AUTO-200",
                   sub: "MC Main Solar Inverter",
-                  kwh: e?.solar_main?.kwh ?? 561125.0,
-                  kw: e?.solar_main?.kw ?? 184.2,
-                  kva: e?.solar_main?.kva ?? 187.0,
-                  v_ll: e?.solar_main?.v_ll ?? 416.5,
-                  i: e?.solar_main?.i ?? 256.0,
-                  pf: 0.985,
-                  group: "MC"
+                  kwh: isOnline && e?.solar_main?.kwh ? e.solar_main.kwh : 0,
+                  kw: isOnline && e?.solar_main?.kw ? e.solar_main.kw : 0,
+                  kva: isOnline && e?.solar_main?.kva ? e.solar_main.kva : 0,
+                  v_ll: isOnline && e?.solar_main?.v_ll ? e.solar_main.v_ll : 0,
+                  i: isOnline && e?.solar_main?.i ? e.solar_main.i : 0,
+                  pf: isOnline && e?.solar_main?.pf ? e.solar_main.pf : 0,
+                  group: "MC",
+                  isOnline
                 })}
               />
               {/* Individual DG Main Unit (NO Cumulative Sum) */}
               <FeederBox
                 label={e?.dg_main?.id || "MC-DG-600 - 1"}
                 sub="MC Main Diesel Generator"
-                kwh={e?.dg_main?.kwh ?? 42800.0}
-                kw={e?.dg_main?.kw ?? 120.0}
-                kva={e?.dg_main?.kva ?? 122.0}
-                v_ll={e?.dg_main?.v_ll ?? 415.0}
-                i={e?.dg_main?.i ?? 168.0}
-                i1={e?.dg_main?.i1}
-                i2={e?.dg_main?.i2}
-                i3={e?.dg_main?.i3}
-                pf={e?.dg_main?.pf ?? 0.985}
+                kwh={isOnline && e?.dg_main?.kwh ? e.dg_main.kwh : 0}
+                kw={isOnline && e?.dg_main?.kw ? e.dg_main.kw : 0}
+                kva={isOnline && e?.dg_main?.kva ? e.dg_main.kva : 0}
+                v_ll={isOnline && e?.dg_main?.v_ll ? e.dg_main.v_ll : 0}
+                i={isOnline && e?.dg_main?.i ? e.dg_main.i : 0}
+                i1={isOnline ? e?.dg_main?.i1 : 0}
+                i2={isOnline ? e?.dg_main?.i2 : 0}
+                i3={isOnline ? e?.dg_main?.i3 : 0}
+                pf={isOnline && e?.dg_main?.pf ? e.dg_main.pf : 0}
                 badge="DG Auxiliary"
+                isOnline={isOnline}
                 onClick={() => handleInspectFeeder({
                   label: e?.dg_main?.id || "MC-DG-600 - 1",
                   sub: "MC Main Diesel Generator",
-                  kwh: e?.dg_main?.kwh ?? 42800.0,
-                  kw: e?.dg_main?.kw ?? 120.0,
-                  kva: e?.dg_main?.kva ?? 122.0,
-                  v_ll: e?.dg_main?.v_ll ?? 415.0,
-                  i: e?.dg_main?.i ?? 168.0,
-                  pf: 0.985,
-                  group: "DG"
+                  kwh: isOnline && e?.dg_main?.kwh ? e.dg_main.kwh : 0,
+                  kw: isOnline && e?.dg_main?.kw ? e.dg_main.kw : 0,
+                  kva: isOnline && e?.dg_main?.kva ? e.dg_main.kva : 0,
+                  v_ll: isOnline && e?.dg_main?.v_ll ? e.dg_main.v_ll : 0,
+                  i: isOnline && e?.dg_main?.i ? e.dg_main.i : 0,
+                  pf: isOnline && e?.dg_main?.pf ? e.dg_main.pf : 0,
+                  group: "DG",
+                  isOnline
                 })}
               />
             </div>
@@ -2174,121 +2233,131 @@ export default function App() {
               <FeederBox
                 label="TR-1 33-IN-TR-1"
                 sub="33/11kV TR-1"
-                kwh={ss?.tr1?.kwh ?? 5834596.5}
-                kw={ss?.tr1?.kw ?? 1893.0}
-                kva={ss?.tr1?.kva ?? 1932.0}
-                v_ll={ss?.tr1?.v_ll ?? 32822.8}
-                i={ss?.tr1?.i ?? 33.9}
-                i1={ss?.tr1?.i1}
-                i2={ss?.tr1?.i2}
-                i3={ss?.tr1?.i3}
-                pf={ss?.tr1?.pf ?? 0.980}
+                kwh={isOnline && ss?.tr1?.kwh ? ss.tr1.kwh : 0}
+                kw={isOnline && ss?.tr1?.kw ? ss.tr1.kw : 0}
+                kva={isOnline && ss?.tr1?.kva ? ss.tr1.kva : 0}
+                v_ll={isOnline && ss?.tr1?.v_ll ? ss.tr1.v_ll : 0}
+                i={isOnline && ss?.tr1?.i ? ss.tr1.i : 0}
+                i1={isOnline ? ss?.tr1?.i1 : 0}
+                i2={isOnline ? ss?.tr1?.i2 : 0}
+                i3={isOnline ? ss?.tr1?.i3 : 0}
+                pf={isOnline && ss?.tr1?.pf ? ss.tr1.pf : 0}
+                isOnline={isOnline}
                 onClick={() => handleInspectFeeder({
                   label: "33-IN-TR-1",
                   sub: "33/11kV Step-Down TR-1",
-                  kwh: ss?.tr1?.kwh ?? 5834596.5,
-                  kw: ss?.tr1?.kw ?? 1893.0,
-                  kva: ss?.tr1?.kva ?? 1932.0,
-                  v_ll: ss?.tr1?.v_ll ?? 32822.8,
-                  i: ss?.tr1?.i ?? 33.9,
-                  pf: 0.980,
-                  group: "33"
+                  kwh: isOnline && ss?.tr1?.kwh ? ss.tr1.kwh : 0,
+                  kw: isOnline && ss?.tr1?.kw ? ss.tr1.kw : 0,
+                  kva: isOnline && ss?.tr1?.kva ? ss.tr1.kva : 0,
+                  v_ll: isOnline && ss?.tr1?.v_ll ? ss.tr1.v_ll : 0,
+                  i: isOnline && ss?.tr1?.i ? ss.tr1.i : 0,
+                  pf: isOnline && ss?.tr1?.pf ? ss.tr1.pf : 0,
+                  group: "33",
+                  isOnline
                 })}
               />
               <FeederBox
                 label="TR-2 33-IN-TR-2"
                 sub="33/11kV TR-2"
-                kwh={ss?.tr2?.kwh ?? 455372.4}
-                kw={ss?.tr2?.kw ?? 1921.0}
-                kva={ss?.tr2?.kva ?? 1961.0}
-                v_ll={ss?.tr2?.v_ll ?? 32808.8}
-                i={ss?.tr2?.i ?? 34.5}
-                i1={ss?.tr2?.i1}
-                i2={ss?.tr2?.i2}
-                i3={ss?.tr2?.i3}
-                pf={ss?.tr2?.pf ?? 0.980}
+                kwh={isOnline && ss?.tr2?.kwh ? ss.tr2.kwh : 0}
+                kw={isOnline && ss?.tr2?.kw ? ss.tr2.kw : 0}
+                kva={isOnline && ss?.tr2?.kva ? ss.tr2.kva : 0}
+                v_ll={isOnline && ss?.tr2?.v_ll ? ss.tr2.v_ll : 0}
+                i={isOnline && ss?.tr2?.i ? ss.tr2.i : 0}
+                i1={isOnline ? ss?.tr2?.i1 : 0}
+                i2={isOnline ? ss?.tr2?.i2 : 0}
+                i3={isOnline ? ss?.tr2?.i3 : 0}
+                pf={isOnline && ss?.tr2?.pf ? ss.tr2.pf : 0}
+                isOnline={isOnline}
                 onClick={() => handleInspectFeeder({
                   label: "33-IN-TR-2",
                   sub: "33/11kV Step-Down TR-2",
-                  kwh: ss?.tr2?.kwh ?? 455372.4,
-                  kw: ss?.tr2?.kw ?? 1921.0,
-                  kva: ss?.tr2?.kva ?? 1961.0,
-                  v_ll: ss?.tr2?.v_ll ?? 32808.8,
-                  i: ss?.tr2?.i ?? 34.5,
-                  pf: 0.980,
-                  group: "33"
+                  kwh: isOnline && ss?.tr2?.kwh ? ss.tr2.kwh : 0,
+                  kw: isOnline && ss?.tr2?.kw ? ss.tr2.kw : 0,
+                  kva: isOnline && ss?.tr2?.kva ? ss.tr2.kva : 0,
+                  v_ll: isOnline && ss?.tr2?.v_ll ? ss.tr2.v_ll : 0,
+                  i: isOnline && ss?.tr2?.i ? ss.tr2.i : 0,
+                  pf: isOnline && ss?.tr2?.pf ? ss.tr2.pf : 0,
+                  group: "33",
+                  isOnline
                 })}
               />
               <FeederBox
                 label="SS-11-TP-1"
                 sub="11kV feeder TP-1"
-                kwh={ss?.tp1?.kwh ?? 5529337.0}
-                kw={ss?.tp1?.kw ?? 448.0}
-                kva={ss?.tp1?.kva ?? 460.0}
-                v_ll={ss?.tp1?.v_ll ?? 11206.0}
-                i={ss?.tp1?.i ?? 23.9}
-                i1={ss?.tp1?.i1}
-                i2={ss?.tp1?.i2}
-                i3={ss?.tp1?.i3}
-                pf={ss?.tp1?.pf ?? 0.970}
+                kwh={isOnline && ss?.tp1?.kwh ? ss.tp1.kwh : 0}
+                kw={isOnline && ss?.tp1?.kw ? ss.tp1.kw : 0}
+                kva={isOnline && ss?.tp1?.kva ? ss.tp1.kva : 0}
+                v_ll={isOnline && ss?.tp1?.v_ll ? ss.tp1.v_ll : 0}
+                i={isOnline && ss?.tp1?.i ? ss.tp1.i : 0}
+                i1={isOnline ? ss?.tp1?.i1 : 0}
+                i2={isOnline ? ss?.tp1?.i2 : 0}
+                i3={isOnline ? ss?.tp1?.i3 : 0}
+                pf={isOnline && ss?.tp1?.pf ? ss.tp1.pf : 0}
+                isOnline={isOnline}
                 onClick={() => handleInspectFeeder({
                   label: "SS-11-TP-1",
                   sub: "11kV Feeder Tech Park 1",
-                  kwh: ss?.tp1?.kwh ?? 5529337.0,
-                  kw: ss?.tp1?.kw ?? 448.0,
-                  kva: ss?.tp1?.kva ?? 460.0,
-                  v_ll: ss?.tp1?.v_ll ?? 11206.0,
-                  i: ss?.tp1?.i ?? 23.9,
-                  pf: 0.970,
-                  group: "SS"
+                  kwh: isOnline && ss?.tp1?.kwh ? ss.tp1.kwh : 0,
+                  kw: isOnline && ss?.tp1?.kw ? ss.tp1.kw : 0,
+                  kva: isOnline && ss?.tp1?.kva ? ss.tp1.kva : 0,
+                  v_ll: isOnline && ss?.tp1?.v_ll ? ss.tp1.v_ll : 0,
+                  i: isOnline && ss?.tp1?.i ? ss.tp1.i : 0,
+                  pf: isOnline && ss?.tp1?.pf ? ss.tp1.pf : 0,
+                  group: "SS",
+                  isOnline
                 })}
               />
               <FeederBox
                 label="SS-11-UB"
                 sub="11kV feeder UB"
-                kwh={ss?.ub?.kwh ?? 3285128.0}
-                kw={ss?.ub?.kw ?? 136.0}
-                kva={ss?.ub?.kva ?? 140.0}
-                v_ll={ss?.ub?.v_ll ?? 11200.3}
-                i={ss?.ub?.i ?? 7.2}
-                i1={ss?.ub?.i1}
-                i2={ss?.ub?.i2}
-                i3={ss?.ub?.i3}
-                pf={ss?.ub?.pf ?? 0.970}
+                kwh={isOnline && ss?.ub?.kwh ? ss.ub.kwh : 0}
+                kw={isOnline && ss?.ub?.kw ? ss.ub.kw : 0}
+                kva={isOnline && ss?.ub?.kva ? ss.ub.kva : 0}
+                v_ll={isOnline && ss?.ub?.v_ll ? ss.ub.v_ll : 0}
+                i={isOnline && ss?.ub?.i ? ss.ub.i : 0}
+                i1={isOnline ? ss?.ub?.i1 : 0}
+                i2={isOnline ? ss?.ub?.i2 : 0}
+                i3={isOnline ? ss?.ub?.i3 : 0}
+                pf={isOnline && ss?.ub?.pf ? ss.ub.pf : 0}
+                isOnline={isOnline}
                 onClick={() => handleInspectFeeder({
                   label: "SS-11-UB",
                   sub: "11kV Feeder University Building",
-                  kwh: ss?.ub?.kwh ?? 3285128.0,
-                  kw: ss?.ub?.kw ?? 136.0,
-                  kva: ss?.ub?.kva ?? 140.0,
-                  v_ll: ss?.ub?.v_ll ?? 11200.3,
-                  i: ss?.ub?.i ?? 7.2,
-                  pf: 0.970,
-                  group: "SS"
+                  kwh: isOnline && ss?.ub?.kwh ? ss.ub.kwh : 0,
+                  kw: isOnline && ss?.ub?.kw ? ss.ub.kw : 0,
+                  kva: isOnline && ss?.ub?.kva ? ss.ub.kva : 0,
+                  v_ll: isOnline && ss?.ub?.v_ll ? ss.ub.v_ll : 0,
+                  i: isOnline && ss?.ub?.i ? ss.ub.i : 0,
+                  pf: isOnline && ss?.ub?.pf ? ss.ub.pf : 0,
+                  group: "SS",
+                  isOnline
                 })}
               />
               <FeederBox
                 label="SS-11-HOSTEL"
                 sub="11kV feeder HOSTEL"
-                kwh={ss?.hostel?.kwh ?? 11553133.0}
-                kw={ss?.hostel?.kw ?? 3176.0}
-                kva={ss?.hostel?.kva ?? 3236.0}
-                v_ll={ss?.hostel?.v_ll ?? 11211.8}
-                i={ss?.hostel?.i ?? 166.5}
-                i1={ss?.hostel?.i1}
-                i2={ss?.hostel?.i2}
-                i3={ss?.hostel?.i3}
-                pf={ss?.hostel?.pf ?? 0.980}
+                kwh={isOnline && ss?.hostel?.kwh ? ss.hostel.kwh : 0}
+                kw={isOnline && ss?.hostel?.kw ? ss.hostel.kw : 0}
+                kva={isOnline && ss?.hostel?.kva ? ss.hostel.kva : 0}
+                v_ll={isOnline && ss?.hostel?.v_ll ? ss.hostel.v_ll : 0}
+                i={isOnline && ss?.hostel?.i ? ss.hostel.i : 0}
+                i1={isOnline ? ss?.hostel?.i1 : 0}
+                i2={isOnline ? ss?.hostel?.i2 : 0}
+                i3={isOnline ? ss?.hostel?.i3 : 0}
+                pf={isOnline && ss?.hostel?.pf ? ss.hostel.pf : 0}
+                isOnline={isOnline}
                 onClick={() => handleInspectFeeder({
                   label: "SS-11-HOSTEL",
                   sub: "11kV Feeder Hostel Complex",
-                  kwh: ss?.hostel?.kwh ?? 11553133.0,
-                  kw: ss?.hostel?.kw ?? 3176.0,
-                  kva: ss?.hostel?.kva ?? 3236.0,
-                  v_ll: ss?.hostel?.v_ll ?? 11211.8,
-                  i: ss?.hostel?.i ?? 166.5,
-                  pf: 0.980,
-                  group: "SS"
+                  kwh: isOnline && ss?.hostel?.kwh ? ss.hostel.kwh : 0,
+                  kw: isOnline && ss?.hostel?.kw ? ss.hostel.kw : 0,
+                  kva: isOnline && ss?.hostel?.kva ? ss.hostel.kva : 0,
+                  v_ll: isOnline && ss?.hostel?.v_ll ? ss.hostel.v_ll : 0,
+                  i: isOnline && ss?.hostel?.i ? ss.hostel.i : 0,
+                  pf: isOnline && ss?.hostel?.pf ? ss.hostel.pf : 0,
+                  group: "SS",
+                  isOnline
                 })}
               />
 
@@ -2303,15 +2372,19 @@ export default function App() {
                 </div>
                 <div className="my-auto py-2">
                   <div className="display-num text-[23px] sm:text-[26px] font-black text-foreground">
-                    {fmtDec(ss?.loss_kwh ?? -1593229.7, 0)}
-                    <span className="text-xs font-bold text-amber-500 ml-1">kWh</span>
+                    {isOnline ? fmtDec(ss?.loss_kwh ?? 0, 0) : "0"}
+                    <span className="text-xs font-bold text-amber-500 ml-1">{isOnline ? "kWh" : "OFFLINE"}</span>
                   </div>
                   <div className="text-[11px] font-bold text-muted mt-0.5">
-                    {ss?.loss_pct ? `${ss.loss_pct}% transmission delta` : "-8.49% delta"}
+                    {isOnline ? (ss?.loss_pct ? `${ss.loss_pct}% transmission delta` : "0.0% delta") : "Stream Offline"}
                   </div>
                 </div>
-                <div className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-black/5 dark:bg-white/5 py-1 px-2 rounded-lg">
-                  Nominal Transmission Balance
+                <div className={`text-[9px] font-bold py-1 px-2 rounded-lg ${
+                  isOnline 
+                    ? "text-emerald-600 dark:text-emerald-400 bg-black/5 dark:bg-white/5" 
+                    : "text-rose-500 bg-rose-500/10"
+                }`}>
+                  {isOnline ? "Nominal Transmission Balance" : "Disconnected · 0 kWh"}
                 </div>
               </div>
             </div>
@@ -2660,7 +2733,7 @@ export default function App() {
                           </span>
                           <span className={`text-[11px] font-bold ${fleetColor}`}>{fleetUnit}</span>
                           <span className="ml-auto text-[10px] mono-num px-2 py-0.5 rounded-full border border-border text-muted bg-slate-100 dark:bg-black/20 font-bold">
-                            PF {(m.pf_avg ?? m.pf ?? 0.985).toFixed(2)}
+                            PF {(m.pf_avg ?? m.pf ?? 0).toFixed(2)}
                           </span>
                         </div>
                         <div className="text-[9px] uppercase font-bold text-muted mt-0.5">
@@ -2672,16 +2745,16 @@ export default function App() {
                         <div className="p-1 rounded bg-slate-100 dark:bg-white/5 border border-border/50">
                           <div className="text-[8.5px] text-muted font-bold">V LL</div>
                           <div className="mono-num font-bold">
-                            {(m.v_ll_avg ?? (m.v_ln_avg * 1.732)).toFixed(0)} V
+                            {(m.v_ll_avg ?? (m.v_ln_avg ? m.v_ln_avg * 1.732 : 0)).toFixed(0)} V
                           </div>
                         </div>
                         <div className="p-1 rounded bg-slate-100 dark:bg-white/5 border border-border/50">
                           <div className="text-[8.5px] text-muted font-bold">I AVG</div>
-                          <div className="mono-num font-bold">{m.i_avg.toFixed(1)} A</div>
+                          <div className="mono-num font-bold">{(m.i_avg ?? 0).toFixed(1)} A</div>
                         </div>
                         <div className="p-1 rounded bg-slate-100 dark:bg-white/5 border border-border/50">
                           <div className="text-[8.5px] text-muted font-bold">FREQ</div>
-                          <div className="mono-num font-bold">{(m.freq_hz ?? m.hz ?? 50.0).toFixed(1)}Hz</div>
+                          <div className="mono-num font-bold">{(m.freq_hz ?? m.hz ?? 0).toFixed(1)}Hz</div>
                         </div>
                       </div>
 
@@ -2703,26 +2776,26 @@ export default function App() {
         drag
         dragElastic={0.25}
         dragMomentum={true}
-        className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40 draggable-dock px-4 py-2 flex items-center gap-3 select-none"
+        className="fixed bottom-3 sm:bottom-5 left-1/2 -translate-x-1/2 z-40 draggable-dock px-3 sm:px-4 py-1.5 sm:py-2 flex items-center gap-2 sm:gap-3 select-none max-w-[95vw] shadow-2xl overflow-x-auto whitespace-nowrap"
       >
-        <div className="flex items-center gap-1.5 text-muted hover:text-foreground cursor-grab">
+        <div className="flex items-center gap-1.5 text-muted hover:text-foreground cursor-grab shrink-0">
           <Move className="w-3.5 h-3.5" />
           <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:inline">Dock</span>
         </div>
 
-        <div className="h-4 w-[1px] bg-border" />
+        <div className="h-4 w-[1px] bg-border shrink-0" />
 
         <button
           onClick={() => setShowSpotlightFling(true)}
-          className="pressable px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 text-foreground hover:bg-black/5 dark:hover:bg-white/10"
+          className="pressable px-2.5 py-1 rounded-full text-[10.5px] sm:text-[11px] font-bold flex items-center gap-1 text-foreground hover:bg-black/5 dark:hover:bg-white/10 shrink-0"
         >
           <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-          <span>33kV Incomer Fling</span>
+          <span>33kV Spotlight Fling</span>
         </button>
 
         <button
           onClick={() => setViewMode(viewMode === "dashboard" ? "custom_cumulative" : "dashboard")}
-          className="pressable px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 text-foreground hover:bg-black/5 dark:hover:bg-white/10"
+          className="pressable px-2.5 py-1 rounded-full text-[10.5px] sm:text-[11px] font-bold flex items-center gap-1 text-foreground hover:bg-black/5 dark:hover:bg-white/10 shrink-0"
         >
           <Layers className="w-3.5 h-3.5 text-sky-500" />
           <span>{viewMode === "dashboard" ? "Custom Studio" : "Main Dashboard"}</span>
@@ -2730,7 +2803,7 @@ export default function App() {
 
         <button
           onClick={() => setDarkMode(!darkMode)}
-          className="pressable p-1.5 rounded-full text-foreground hover:bg-black/5 dark:hover:bg-white/10"
+          className="pressable p-1.5 rounded-full text-foreground hover:bg-black/5 dark:hover:bg-white/10 shrink-0"
           title="Toggle Theme"
         >
           {darkMode ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-sky-600" />}
