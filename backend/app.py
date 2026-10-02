@@ -1232,11 +1232,11 @@ class PowerStudioLivePoller:
 # ---------- FastAPI ----------
 app = FastAPI(title="Smart Energy Dashboard API", version="1.0.0")
 
-# CORS
+# CORS - allow all origins so Vercel, mobile, and cloud frontends can access seamlessly
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CONFIG["security"]["cors_origins"],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
