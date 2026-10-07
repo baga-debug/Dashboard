@@ -1634,13 +1634,19 @@ async def api_compare(request: Request,
     """Compare by day AND time. daily/monthly from daily_energy (AE delta, ~7MB/y). hourly from readings 5-min (raw 90d)."""
     check_rate(request)
     want = [x.strip() for x in ids.split(",") if x.strip()][:20]
-    today_str = "2026-10-02"
+    now_utc = datetime.now(timezone.utc)
+    today_str = max(now_utc.strftime("%Y-%m-%d"), datetime.now().strftime("%Y-%m-%d"))
 
     if group in ("daily", "monthly"):
+        # Keep daily_energy in sync with live meter telemetry
+        await sync_daily_energy()
+
         conn = sqlite3.connect(DB_PATH, timeout=5.0, check_same_thread=False)
         conn.row_factory = sqlite3.Row
 
-        eff_to = min(to[:10], today_str) if to else today_str
+        eff_to = to[:10] if to else today_str
+        if eff_to > today_str:
+            eff_to = today_str
         eff_from = from_[:10] if from_ else None
 
         if eff_from and eff_from > today_str:
@@ -1657,7 +1663,9 @@ async def api_compare(request: Request,
         if eff_to:
             q += " AND day <= ?"; params.append(eff_to)
         if not eff_from and not eff_to:
-            q += " AND day >= '2026-09-26' AND day <= '2026-10-02'"
+            default_from = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+            q += " AND day >= ? AND day <= ?"
+            params.extend([default_from, eff_to])
 
         q += " ORDER BY day ASC LIMIT 20000"
         cur = conn.execute(q, params)
@@ -1673,7 +1681,7 @@ async def api_compare(request: Request,
                     "storage_note": "Real 365-day monthly aggregation from daily_energy"}
 
         return {"group": "daily", "count": len(rows), "data": rows, "unit": "kWh",
-                "storage_note": "Real daily consumption from 1-year telemetry archive (2025-10-03 to 2026-10-02)"}
+                "storage_note": f"Real daily consumption from telemetry archive ({eff_from or 'historical'} to {eff_to})"}
     # hourly/time compare from readings (server-backed live values stored locally, raw 90d)
     want_ids = set(want)
     conn = sqlite3.connect(DB_PATH, timeout=5.0, check_same_thread=False)
@@ -1685,20 +1693,26 @@ async def api_compare(request: Request,
     if to:
         q += " AND ts <= ?"; params2.append(to)
     if not from_ and not to:
-        q += " AND ts >= datetime('now','-7 days')"
-    q += " ORDER BY ts ASC LIMIT 20000"
+        q += " AND ts >= datetime('now','-48 hours')"
+    
+    # Query newest readings first to prevent starving latest telemetry, then reverse for graph chronological ordering
+    q += " ORDER BY ts DESC LIMIT 5000"
     cur = conn.execute(q, params2)
+    raw_rows = cur.fetchall()
+    conn.close()
+
     out = []
-    for r in cur.fetchall():
+    for r in raw_rows:
         try: p = json.loads(r["payload"])
         except: continue
         did = p.get("device_id") or p.get("name") or ""
         if want_ids and did not in want_ids:
             continue
         out.append({"ts": r["ts"][:16], "device_id": did, "kw": p.get("kw"), "kwh": p.get("kwh_import"), "i": p.get("i_avg")})
-    conn.close()
-    return {"group": "hourly", "count": len(out), "data": out[-500:], "unit": "kW/kWh/A @time",
-            "storage_note": "Hourly/time from readings (raw 90d, server-backed). Daily for 1-year."}
+    
+    out.reverse()
+    return {"group": "hourly", "count": len(out), "data": out[-1000:], "unit": "kW/kWh/A @time",
+            "storage_note": "Granular live and historical telemetry curves from local readings archive"}
 
 @app.get("/api/config")
 async def api_config(request: Request, _: None = Depends(verify_api_key)):
@@ -2192,43 +2206,63 @@ async def root():
         return Response(content=(frontend_dist / "index.html").read_text(encoding="utf-8"), media_type="text/html")
     return {"ok": True, "docs": "/docs", "health": "/health", "live": "/api/live", "frontend": "/app" if frontend_dist.exists() else "run npm run build in frontend"}
 
-# ---------- daily rollup task (server 172.16.160.49 is truth, laptop stores AE deltas; survives reboot via service) ----------
+# ---------- daily rollup task (stores live cumulative deltas per day; survives reboot via service) ----------
+async def sync_daily_energy():
+    async with STATE.lock:
+        meters = list(STATE.latest.values()) if STATE.latest else []
+    if not meters:
+        return
+    today = iso_now()[:10]
+    conn = sqlite3.connect(DB_PATH, timeout=5.0, check_same_thread=False)
+    try:
+        for m in meters:
+            did = (m.get("device_id") or m.get("name") or "").strip()
+            if not did or "old" in did.lower():
+                continue
+            try:
+                kwh = float(m.get("kwh_import") or 0)
+            except:
+                continue
+            if kwh <= 0:
+                continue
+            cur = conn.execute("SELECT kwh_start, kwh_end FROM daily_energy WHERE day=? AND device_id=?", (today, did))
+            row = cur.fetchone()
+            if row is None:
+                # Find previous day's kwh_end to compute clean daily consumption
+                prev_cur = conn.execute(
+                    "SELECT kwh_end FROM daily_energy WHERE device_id=? AND day < ? AND kwh_end > 0 ORDER BY day DESC LIMIT 1",
+                    (did, today)
+                )
+                prev_row = prev_cur.fetchone()
+                start = prev_row[0] if prev_row and prev_row[0] <= kwh else kwh
+                cons = round(max(0.0, kwh - start), 2)
+                conn.execute(
+                    "INSERT INTO daily_energy(day, device_id, kwh_start, kwh_end, consumption) VALUES(?,?,?,?,?)",
+                    (today, did, start, kwh, cons)
+                )
+            else:
+                start = row[0]
+                cons = round(max(0.0, kwh - start), 2) if kwh >= start else round(kwh, 2)
+                conn.execute(
+                    "UPDATE daily_energy SET kwh_end=?, consumption=? WHERE day=? AND device_id=?",
+                    (kwh, cons, today, did)
+                )
+        conn.commit()
+    except Exception as e:
+        log.warning(f"sync_daily_energy error: {e}")
+    finally:
+        conn.close()
+
 async def daily_rollup_task():
-    last_day = ""
     while True:
         try:
-            async with STATE.lock:
-                meters = list(STATE.latest.values()) if STATE.latest else []
-            if meters:
-                today = iso_now()[:10]
-                # snapshot start/end per device once per day; update end continuously
-                conn = sqlite3.connect(DB_PATH, timeout=5.0, check_same_thread=False)
-                try:
-                    for m in meters:
-                        did = (m.get("device_id") or m.get("name") or "").strip()
-                        if not did or "old" in did.lower():
-                            continue
-                        try: kwh = float(m.get("kwh_import") or 0)
-                        except: continue
-                        cur = conn.execute("SELECT kwh_start, kwh_end FROM daily_energy WHERE day=? AND device_id=?", (today, did))
-                        row = cur.fetchone()
-                        if row is None:
-                            conn.execute("INSERT INTO daily_energy(day, device_id, kwh_start, kwh_end, consumption) VALUES(?,?,?,?,?)",
-                                         (today, did, kwh, kwh, 0.0))
-                        else:
-                            start = row[0]
-                            cons = round(max(0.0, kwh - start), 2) if kwh >= start else round(kwh, 2)
-                            conn.execute("UPDATE daily_energy SET kwh_end=?, consumption=? WHERE day=? AND device_id=?", (kwh, cons, today, did))
-                    conn.commit()
-                finally:
-                    conn.close()
-                last_day = today
-            await asyncio.sleep(300)  # 5-min snapshot; midnight delta becomes day consumption
+            await sync_daily_energy()
+            await asyncio.sleep(15)  # sync frequently (15s) so live charts update immediately
         except asyncio.CancelledError:
             break
         except Exception as e:
             log.warning(f"daily_rollup fail: {e}")
-            await asyncio.sleep(60)
+            await asyncio.sleep(15)
 
 # ---------- lifespan ----------
 sim_task: Optional[asyncio.Task] = None

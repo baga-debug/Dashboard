@@ -36,7 +36,7 @@ import {
    - Startup animation removed: cards sit stably on load
    - Click-to-flip & expand: clicking any box flips and expands with full specs & live oscilloscope waveform
    - One Piece Spotlight Fling: ONLY triggered by 33 Incomer
-   - Historical comparison capped at 2026-10-02 with real 365-day archive
+   - Historical comparison continuously synced to live SCADA & real 365-day archive
    - Dedicated Custom Cumulative Studio page with editable examples
    - Resilient Vercel / offline deployment fallback layer
    ========================================================================== */
@@ -1773,11 +1773,19 @@ export default function App() {
     return () => clearInterval(timer)
   }, [cascadeKey])
 
+  // Dynamic date helpers
+  const todayStr = useMemo(() => new Date().toLocaleDateString("en-CA"), [])
+  const sevenDaysAgoStr = useMemo(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 7)
+    return d.toLocaleDateString("en-CA")
+  }, [])
+
   // Comparison State
   const [cmpMode, setCmpMode] = useState<"daily" | "hourly">("daily")
   const [cmpChartType, setCmpChartType] = useState<"line" | "area" | "bar">("line")
-  const [cmpFrom, setCmpFrom] = useState("2026-09-26")
-  const [cmpTo, setCmpTo] = useState("2026-10-02")
+  const [cmpFrom, setCmpFrom] = useState(sevenDaysAgoStr)
+  const [cmpTo, setCmpTo] = useState(todayStr)
   const [cmpTimeFrom, setCmpTimeFrom] = useState("")
   const [cmpTimeTo, setCmpTimeTo] = useState("")
   const [cmpData, setCmpData] = useState<any[]>([])
@@ -1865,12 +1873,13 @@ export default function App() {
     }
 
     fetchCompare()
-    const t = setInterval(fetchCompare, 60000)
+    // Poll frequently (every 4 seconds) to ensure real-time graph updates
+    const t = setInterval(fetchCompare, 4000)
     return () => {
       ignore = true
       clearInterval(t)
     }
-  }, [cmpMode, cmpTimeFrom, cmpTimeTo, cmpFrom, cmpTo])
+  }, [cmpMode, cmpTimeFrom, cmpTimeTo, cmpFrom, cmpTo, live?.ts])
 
   // Transform comparison data for Recharts Multi-Series
   const chartData = useMemo(() => {
@@ -1886,7 +1895,8 @@ export default function App() {
     } else {
       const map: Record<string, any> = {}
       for (const row of cmpData) {
-        const key = (row.ts || "").slice(-5) || "Now"
+        const rawTs = row.ts || ""
+        const key = rawTs.length >= 16 ? rawTs.slice(5, 16).replace("T", " ") : rawTs || "Now"
         if (!map[key]) map[key] = { name: key }
         map[key][row.device_id] = row.kw ?? row.kwh ?? row.i ?? 0
       }
@@ -2412,7 +2422,7 @@ export default function App() {
                   Telemetry Comparison Studio
                 </h3>
                 <p className="text-xs text-muted font-medium mt-0.5">
-                  Real 1-year historical telemetry comparison · Strictly bounded to real database archives (up to 2026-10-02)
+                  Real historical telemetry comparison · Continuous SCADA archive & daily aggregation
                 </p>
               </div>
 
@@ -2461,7 +2471,7 @@ export default function App() {
                     <input
                       type="datetime-local"
                       value={cmpTimeFrom}
-                      max="2026-10-02T23:59"
+                      max={`${todayStr}T23:59`}
                       onChange={e => setCmpTimeFrom(e.target.value)}
                       className="glass-pill px-2 py-1 text-foreground bg-transparent outline-none text-[11px]"
                     />
@@ -2469,7 +2479,7 @@ export default function App() {
                     <input
                       type="datetime-local"
                       value={cmpTimeTo}
-                      max="2026-10-02T23:59"
+                      max={`${todayStr}T23:59`}
                       onChange={e => setCmpTimeTo(e.target.value)}
                       className="glass-pill px-2 py-1 text-foreground bg-transparent outline-none text-[11px]"
                     />
@@ -2478,25 +2488,41 @@ export default function App() {
                   <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
                     <div className="flex items-center gap-1">
                       <button
-                        onClick={() => { setCmpFrom("2026-09-26"); setCmpTo("2026-10-02"); }}
+                        onClick={() => {
+                          const d = new Date(); d.setDate(d.getDate() - 7);
+                          setCmpFrom(d.toLocaleDateString("en-CA"));
+                          setCmpTo(new Date().toLocaleDateString("en-CA"));
+                        }}
                         className="px-2 py-0.5 rounded-lg border border-border bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-[10px] font-bold"
                       >
                         7D
                       </button>
                       <button
-                        onClick={() => { setCmpFrom("2026-09-02"); setCmpTo("2026-10-02"); }}
+                        onClick={() => {
+                          const d = new Date(); d.setDate(d.getDate() - 30);
+                          setCmpFrom(d.toLocaleDateString("en-CA"));
+                          setCmpTo(new Date().toLocaleDateString("en-CA"));
+                        }}
                         className="px-2 py-0.5 rounded-lg border border-border bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-[10px] font-bold"
                       >
                         30D
                       </button>
                       <button
-                        onClick={() => { setCmpFrom("2026-07-04"); setCmpTo("2026-10-02"); }}
+                        onClick={() => {
+                          const d = new Date(); d.setDate(d.getDate() - 90);
+                          setCmpFrom(d.toLocaleDateString("en-CA"));
+                          setCmpTo(new Date().toLocaleDateString("en-CA"));
+                        }}
                         className="px-2 py-0.5 rounded-lg border border-border bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-[10px] font-bold"
                       >
                         90D
                       </button>
                       <button
-                        onClick={() => { setCmpFrom("2025-10-03"); setCmpTo("2026-10-02"); }}
+                        onClick={() => {
+                          const d = new Date(); d.setDate(d.getDate() - 365);
+                          setCmpFrom(d.toLocaleDateString("en-CA"));
+                          setCmpTo(new Date().toLocaleDateString("en-CA"));
+                        }}
                         className="px-2 py-0.5 rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-bold"
                       >
                         1 Year (365d)
@@ -2505,8 +2531,8 @@ export default function App() {
                     <input
                       type="date"
                       value={cmpFrom}
-                      min="2025-10-03"
-                      max="2026-10-02"
+                      min="2025-10-01"
+                      max={todayStr}
                       onChange={e => setCmpFrom(e.target.value)}
                       className="glass-pill px-2 py-1 text-foreground bg-transparent outline-none text-[11px]"
                     />
@@ -2514,8 +2540,8 @@ export default function App() {
                     <input
                       type="date"
                       value={cmpTo}
-                      min="2025-10-03"
-                      max="2026-10-02"
+                      min="2025-10-01"
+                      max={todayStr}
                       onChange={e => setCmpTo(e.target.value)}
                       className="glass-pill px-2 py-1 text-foreground bg-transparent outline-none text-[11px]"
                     />
@@ -2538,7 +2564,7 @@ export default function App() {
                 <div className="h-full flex flex-col items-center justify-center text-muted gap-2">
                   <BarChart3 className="w-8 h-8 opacity-40 animate-pulse" />
                   <span className="text-xs font-semibold">
-                    {cmpLoading ? "Fetching yearlong telemetry archive..." : "Select date range up to 2026-10-02 to view telemetry curves"}
+                    {cmpLoading ? "Fetching telemetry curves..." : "Select date range to view telemetry curves"}
                   </span>
                 </div>
               ) : (
