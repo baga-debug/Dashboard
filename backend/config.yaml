@@ -5,7 +5,7 @@ gateway:
   host: "10.1.156.12"
   port: 502
   timeout_ms: 800          # per-slave request timeout
-  poll_ms: 3000            # full cycle interval
+  poll_ms: 2500            # full cycle interval
   keepalive_s: 15
   retries: 2
   circuit_break_ms: 30000  # isolate failing slave 30s
@@ -66,7 +66,7 @@ powerstudio:
   host: "172.16.160.49"
   port: 5222
   enabled: true
-  poll_ms: 3000
+  poll_ms: 2500
   base_path: "/services/user"
   user: "Engg"
   password: "Engg"

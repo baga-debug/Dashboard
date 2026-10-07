@@ -1208,7 +1208,7 @@ function useLive() {
           sseActive = false
           setSseUp(false)
           es?.close()
-          if (!poll) poll = setInterval(fetchLive, 3000)
+          if (!poll) poll = setInterval(fetchLive, 2500)
         }
         es.onopen = () => {
           sseActive = true
@@ -1219,7 +1219,7 @@ function useLive() {
           }
         }
       } catch {
-        if (!poll) poll = setInterval(fetchLive, 3000)
+        if (!poll) poll = setInterval(fetchLive, 2500)
       }
     }
 
@@ -1227,12 +1227,12 @@ function useLive() {
     fetchHealth()
     startSSE()
 
-    const hTimer = setInterval(fetchHealth, 5000)
+    const hTimer = setInterval(fetchHealth, 4000)
     const backupTimer = setInterval(() => {
       if (!sseActive && !poll) {
-        poll = setInterval(fetchLive, 3000)
+        poll = setInterval(fetchLive, 2500)
       }
-    }, 10000)
+    }, 6000)
 
     return () => {
       if (es) es.close()
@@ -1268,13 +1268,13 @@ function Sparkline({ data, color }: { data: { t: number; kw: number }[]; color: 
   )
 }
 
-function GlassTooltip({ active, payload, label }: any) {
+function GlassTooltip({ active, payload, label, unit }: any) {
   if (!active || !payload?.length) return null
   return (
-    <div className="p-3 rounded-2xl bg-white/95 dark:bg-[#111420]/95 backdrop-blur-xl border border-slate-200 dark:border-white/10 shadow-2xl text-xs space-y-1.5 min-w-[170px]">
+    <div className="p-3 rounded-2xl bg-white/95 dark:bg-[#111420]/95 backdrop-blur-xl border border-slate-200 dark:border-white/10 shadow-2xl text-xs space-y-1.5 min-w-[180px]">
       <div className="flex items-center justify-between border-b border-border/80 pb-1 font-bold text-foreground">
         <span>{label}</span>
-        <span className="text-[9px] uppercase tracking-wider text-muted font-bold">Telemetry</span>
+        <span className="text-[9px] uppercase tracking-wider text-muted font-bold">{unit || "Telemetry"}</span>
       </div>
       <div className="space-y-1">
         {payload.map((p: any, idx: number) => (
@@ -1284,7 +1284,7 @@ function GlassTooltip({ active, payload, label }: any) {
               {p.name}
             </span>
             <span className="mono-num font-bold">
-              {Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })}
+              {Number(p.value).toLocaleString(undefined, { maximumFractionDigits: 1 })} <span className="text-[10px] text-muted font-normal">{unit || ""}</span>
             </span>
           </div>
         ))}
@@ -1822,9 +1822,9 @@ export default function App() {
       } catch {}
     }
     fetchElec()
-    t = setInterval(fetchElec, 4000)
+    t = setInterval(fetchElec, 2000)
     return () => clearInterval(t)
-  }, [])
+  }, [live?.ts])
 
   // Comparison Data Fetcher
   const loadCompare = useCallback(async (mode: "daily" | "hourly") => {
@@ -2573,8 +2573,13 @@ export default function App() {
                     <LineChart data={chartData} margin={{ top: 10, right: 15, left: -10, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(150, 150, 150, 0.15)" />
                       <XAxis dataKey="name" stroke="var(--muted)" fontSize={11} tickLine={false} />
-                      <YAxis stroke="var(--muted)" fontSize={11} tickLine={false} />
-                      <Tooltip content={<GlassTooltip />} />
+                      <YAxis
+                        stroke="var(--muted)"
+                        fontSize={11}
+                        tickLine={false}
+                        tickFormatter={(v: number) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)}
+                      />
+                      <Tooltip content={<GlassTooltip unit={cmpMode === "daily" ? "kWh" : "kW"} />} />
                       <Legend wrapperStyle={{ fontSize: 11, paddingTop: 10 }} />
                       {cmpDeviceKeys.map((k) => (
                         <Line
@@ -2602,8 +2607,13 @@ export default function App() {
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(150, 150, 150, 0.15)" />
                       <XAxis dataKey="name" stroke="var(--muted)" fontSize={11} tickLine={false} />
-                      <YAxis stroke="var(--muted)" fontSize={11} tickLine={false} />
-                      <Tooltip content={<GlassTooltip />} />
+                      <YAxis
+                        stroke="var(--muted)"
+                        fontSize={11}
+                        tickLine={false}
+                        tickFormatter={(v: number) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)}
+                      />
+                      <Tooltip content={<GlassTooltip unit={cmpMode === "daily" ? "kWh" : "kW"} />} />
                       <Legend wrapperStyle={{ fontSize: 11, paddingTop: 10 }} />
                       {cmpDeviceKeys.map((k) => (
                         <Area
@@ -2622,8 +2632,13 @@ export default function App() {
                     <BarChart data={chartData} margin={{ top: 10, right: 15, left: -10, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(150, 150, 150, 0.15)" />
                       <XAxis dataKey="name" stroke="var(--muted)" fontSize={11} tickLine={false} />
-                      <YAxis stroke="var(--muted)" fontSize={11} tickLine={false} />
-                      <Tooltip content={<GlassTooltip />} />
+                      <YAxis
+                        stroke="var(--muted)"
+                        fontSize={11}
+                        tickLine={false}
+                        tickFormatter={(v: number) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)}
+                      />
+                      <Tooltip content={<GlassTooltip unit={cmpMode === "daily" ? "kWh" : "kW"} />} />
                       <Legend wrapperStyle={{ fontSize: 11, paddingTop: 10 }} />
                       {cmpDeviceKeys.map((k) => (
                         <Bar key={k} dataKey={k} name={k} fill={DEVICE_COLORS[k] || "#8884d8"} radius={[4, 4, 0, 0]} />

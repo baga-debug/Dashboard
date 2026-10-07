@@ -193,6 +193,9 @@ def init_db():
             PRIMARY KEY (day, device_id)
         );""")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_daily_energy_day ON daily_energy(day);")
+        # Sanitize any anomalous gap jumps or uninitialized zero-start spikes in daily_energy
+        conn.execute("UPDATE daily_energy SET consumption = round(max(0.0, kwh_end - kwh_start), 2) WHERE kwh_start > 0 AND consumption > 150000;")
+        conn.execute("UPDATE daily_energy SET consumption = 0.0, kwh_start = kwh_end WHERE kwh_start <= 0 OR consumption > 150000;")
         conn.commit()
         log.info(f"DB init {DB_PATH} WAL")
     finally:
@@ -1130,75 +1133,83 @@ class PowerStudioLivePoller:
                 # fetch values for each device in batches, map to meters
                 meters: Dict[int, Dict[str, Any]] = {}
                 ts = iso_now()
-                # batch 12 at a time to avoid overload, total 249 ~ 21 batches ~ 2 sec
-                for i in range(0, len(ids), 12):
-                    chunk = ids[i:i+12]
-                    # gather
-                    async def fetch_one(did):
-                        try:
-                            # values.xml?id=did is correct for 172.16.160.49
-                            rr = await self.client.get(f"{base}/values.xml", params={"id": did})
-                            if rr.status_code != 200 or "<variable" not in rr.text:
-                                # try device param fallback
-                                rr = await self.client.get(f"{base}/values.xml", params={"device": did})
-                            if rr.status_code == 200 and "<variable" in rr.text:
-                                # parse <variable><id>MC-...AE</id><value>...</value>
-                                import xml.etree.ElementTree as ET
-                                try:
-                                    root = ET.fromstring(rr.text)
-                                    vals: Dict[str, float] = {}
-                                    for elem in root.iter():
-                                        if elem.tag.lower() == "variable":
-                                            vid = None
-                                            val = None
-                                            for child in elem:
-                                                if child.tag.lower() == "id" and child.text:
-                                                    vid = child.text.strip()
-                                                elif child.tag.lower() == "value" and child.text is not None:
-                                                    try:
-                                                        val = float(child.text.strip())
-                                                    except:
-                                                        try: val = float(child.text.strip() or 0)
-                                                        except: val = 0
-                                            if vid:
-                                                vals[vid] = val
-                                                # also short key
-                                                short = vid.split(".")[-1] if "." in vid else vid
-                                                vals[short] = val
-                                    return (did, vals)
-                                except Exception as e:
-                                    log.warning(f"parse values {did}: {e}")
-                                    return (did, {})
-                            return (did, {})
-                        except Exception as e:
-                            log.warning(f"fetch values {did}: {e}")
-                            return (did, {})
 
-                    import asyncio as _asyncio
+                # Prioritize key grid nodes so UI receives instant sub-second telemetry updates
+                KEY_IDS = ["33-INCOMER","33-IN-TR-1","33-IN-TR-2","SS-11-TP-1","SS-11-UB","SS-11-HOSTEL","MC-HTVCB-IN","MC-SOL-AUTO-200","MC-DG-SYNC"]
+                priority_ids = [did for did in KEY_IDS if did in ids]
+                remaining_ids = [did for did in ids if did not in priority_ids]
+
+                async def fetch_one(did):
+                    try:
+                        rr = await self.client.get(f"{base}/values.xml", params={"id": did})
+                        if rr.status_code != 200 or "<variable" not in rr.text:
+                            rr = await self.client.get(f"{base}/values.xml", params={"device": did})
+                        if rr.status_code == 200 and "<variable" in rr.text:
+                            import xml.etree.ElementTree as ET
+                            try:
+                                root = ET.fromstring(rr.text)
+                                vals: Dict[str, float] = {}
+                                for elem in root.iter():
+                                    if elem.tag.lower() == "variable":
+                                        vid = val = None
+                                        for child in elem:
+                                            if child.tag.lower() == "id" and child.text:
+                                                vid = child.text.strip()
+                                            elif child.tag.lower() == "value" and child.text is not None:
+                                                try: val = float(child.text.strip())
+                                                except:
+                                                    try: val = float(child.text.strip() or 0)
+                                                    except: val = 0
+                                        if vid:
+                                            vals[vid] = val
+                                            short = vid.split(".")[-1] if "." in vid else vid
+                                            vals[short] = val
+                                return (did, vals)
+                            except Exception as e:
+                                log.warning(f"parse values {did}: {e}")
+                                return (did, {})
+                        return (did, {})
+                    except Exception as e:
+                        log.warning(f"fetch values {did}: {e}")
+                        return (did, {})
+
+                import asyncio as _asyncio
+
+                # Fast pass: fetch key primary substation nodes first
+                if priority_ids:
+                    p_results = await _asyncio.gather(*[fetch_one(did) for did in priority_ids])
+                    for did, vals in p_results:
+                        if vals:
+                            m = self._map_device_to_meter(did, vals, ts)
+                            meters[m["meter_id"]] = m
+                    if meters:
+                        async with STATE.lock:
+                            for mid, m in meters.items():
+                                STATE.latest[mid] = m
+                            STATE.last_ts = ts
+                            STATE.source = "powerstudio"
+
+                # Secondary pass: fetch remaining devices in chunks
+                for i in range(0, len(remaining_ids), 16):
+                    chunk = remaining_ids[i:i+16]
                     results = await _asyncio.gather(*[fetch_one(did) for did in chunk])
                     for did, vals in results:
-                        if not vals:
-                            continue
-                        m = self._map_device_to_meter(did, vals, ts)
-                        # use device hash as meter_id
-                        meters[m["meter_id"]] = m
-                    # small gap
-                    await asyncio.sleep(0.15)
+                        if vals:
+                            m = self._map_device_to_meter(did, vals, ts)
+                            meters[m["meter_id"]] = m
+                    await asyncio.sleep(0.08)
 
                 if meters:
-                    # compute combined
                     total_kw = sum(v.get("kw",0) for v in meters.values())
                     total_kwh = sum(v.get("kwh_import",0) for v in meters.values())
                     pf_avg = sum(v.get("pf",0) for v in meters.values())/len(meters) if meters else 0
                     async with STATE.lock:
-                        # only override live if gateway still offline (strict)
                         if not STATE.gateway.get("reachable", False):
                             STATE.latest = meters
                             STATE.combined = {"kw": round(total_kw,2), "kwh": round(total_kwh,2), "pf": round(pf_avg,3), "active": sum(1 for v in meters.values() if v.get("status")=="online"), "total": len(meters)}
                             STATE.last_ts = ts
                             STATE.source = "powerstudio"
                             STATE.poll_count += 1
-                            # update per_slave health for active bridged meters
                             for mid, m in meters.items():
                                 STATE.per_slave[mid] = {
                                     "status": m.get("status", "online"),
@@ -1207,22 +1218,33 @@ class PowerStudioLivePoller:
                                     "failures": 0,
                                     "blocked_until": 0
                                 }
-                            log.info(f"PowerStudioLivePoller: bridged {len(meters)} real devices to live (All tab) — gateway offline, MC+TP+UB all in")
-                        # persist key 7 devices every cycle (for hourly/time compare) + 10-sample rotation for the rest in batch
-                        KEY_IDS = {"33-INCOMER","33-IN-TR-1","33-IN-TR-2","SS-11-TP-1","SS-11-UB","SS-11-HOSTEL","MC-HTVCB-IN"}
+                        # Persist key meters and sample to database archive
                         batch_items = []
                         for mid, payload in meters.items():
                             did = (payload.get("device_id") or payload.get("name") or "")
                             if did in KEY_IDS:
                                 batch_items.append((ts, mid, payload))
-                        for mid, payload in list(meters.items())[:10]:
-                            did = (payload.get("device_id") or payload.get("name") or "")
-                            if did not in KEY_IDS:
-                                batch_items.append((ts, mid, payload))
                         if batch_items:
                             db_insert_readings_batch(batch_items)
-                    # also update powerstudio health devices already 249
-                await asyncio.sleep(5)  # poll every 5s
+
+                    # Cloud telemetry push: keep Render cloud backend synchronized with live campus SCADA
+                    if not hasattr(self, "_last_cloud_push"):
+                        self._last_cloud_push = 0.0
+                    now_sec = time.time()
+                    if now_sec - self._last_cloud_push > 8.0 and meters:
+                        self._last_cloud_push = now_sec
+                        async def _push_cloud(payload_meters, payload_comb, payload_ts):
+                            try:
+                                async with httpx.AsyncClient(timeout=4.0) as push_cli:
+                                    await push_cli.post(
+                                        "https://srmist-energy-backend.onrender.com/api/telemetry/push",
+                                        json={"meters": payload_meters, "combined": payload_comb, "ts": payload_ts}
+                                    )
+                            except:
+                                pass
+                        _asyncio.create_task(_push_cloud(list(meters.values()), STATE.combined, ts))
+
+                await asyncio.sleep(2.5)  # poll every 2.5s for real-time responsiveness
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -1332,6 +1354,35 @@ async def api_live(request: Request, _: None = Depends(verify_api_key)):
     if not meters:
         return JSONResponse({"combined": combined, "meters": [], "ts": ts, "source": source})
     return {"combined": combined, "meters": meters, "ts": ts, "source": source}
+
+@app.post("/api/telemetry/push")
+async def api_telemetry_push(request: Request):
+    """Telemetry sync endpoint: receives real-time meter readings from campus SCADA bridge."""
+    try:
+        data = await request.json()
+        meters_list = data.get("meters", [])
+        combined = data.get("combined")
+        ts = data.get("ts") or iso_now()
+        if meters_list:
+            async with STATE.lock:
+                for m in meters_list:
+                    mid = m.get("meter_id")
+                    if mid:
+                        STATE.latest[mid] = m
+                if combined:
+                    STATE.combined = combined
+                STATE.last_ts = ts
+                STATE.source = "powerstudio"
+                STATE.poll_count += 1
+            # Persist key meters into readings
+            KEY_IDS = {"33-INCOMER","33-IN-TR-1","33-IN-TR-2","SS-11-TP-1","SS-11-UB","SS-11-HOSTEL","MC-HTVCB-IN"}
+            batch = [(ts, m["meter_id"], m) for m in meters_list if (m.get("device_id") or m.get("name")) in KEY_IDS]
+            if batch:
+                db_insert_readings_batch(batch)
+            await sync_daily_energy()
+        return {"ok": True, "count": len(meters_list), "ts": ts}
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
 
 @app.get("/api/history")
 async def api_history(
@@ -1669,7 +1720,7 @@ async def api_compare(request: Request,
 
         q += " ORDER BY day ASC LIMIT 20000"
         cur = conn.execute(q, params)
-        rows = [{"day": r["day"], "device_id": r["device_id"], "kwh": r["consumption"]} for r in cur.fetchall()]
+        rows = [{"day": r["day"], "device_id": r["device_id"], "kwh": min(r["consumption"], 120000.0) if r["consumption"] <= 150000 else 0.0} for r in cur.fetchall()]
         conn.close()
 
         if group == "monthly":
@@ -2228,24 +2279,35 @@ async def sync_daily_energy():
             cur = conn.execute("SELECT kwh_start, kwh_end FROM daily_energy WHERE day=? AND device_id=?", (today, did))
             row = cur.fetchone()
             if row is None:
-                # Find previous day's kwh_end to compute clean daily consumption
+                # Only use yesterday's end reading if it was strictly yesterday (prevents multi-day offline gap spikes)
+                yesterday = (datetime.fromisoformat(today) - timedelta(days=1)).strftime("%Y-%m-%d")
                 prev_cur = conn.execute(
-                    "SELECT kwh_end FROM daily_energy WHERE device_id=? AND day < ? AND kwh_end > 0 ORDER BY day DESC LIMIT 1",
-                    (did, today)
+                    "SELECT kwh_end FROM daily_energy WHERE device_id=? AND day = ? AND kwh_end > 0",
+                    (did, yesterday)
                 )
                 prev_row = prev_cur.fetchone()
-                start = prev_row[0] if prev_row and prev_row[0] <= kwh else kwh
+                start = prev_row[0] if prev_row and 0 < prev_row[0] <= kwh else kwh
                 cons = round(max(0.0, kwh - start), 2)
+                if cons > 150000:
+                    start = kwh
+                    cons = 0.0
                 conn.execute(
                     "INSERT INTO daily_energy(day, device_id, kwh_start, kwh_end, consumption) VALUES(?,?,?,?,?)",
                     (today, did, start, kwh, cons)
                 )
             else:
                 start = row[0]
-                cons = round(max(0.0, kwh - start), 2) if kwh >= start else round(kwh, 2)
+                if not start or start <= 0 or start > kwh:
+                    start = kwh
+                    cons = 0.0
+                else:
+                    cons = round(max(0.0, kwh - start), 2)
+                if cons > 150000:
+                    start = kwh
+                    cons = 0.0
                 conn.execute(
-                    "UPDATE daily_energy SET kwh_end=?, consumption=? WHERE day=? AND device_id=?",
-                    (kwh, cons, today, did)
+                    "UPDATE daily_energy SET kwh_start=?, kwh_end=?, consumption=? WHERE day=? AND device_id=?",
+                    (start, kwh, cons, today, did)
                 )
         conn.commit()
     except Exception as e:
