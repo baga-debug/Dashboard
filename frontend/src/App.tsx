@@ -151,8 +151,8 @@ const DEFAULT_AGGREGATIONS: CustomAggregation[] = [
    ========================================================================== */
 function AppleGlassLoadingScreen({ progress }: { progress: number }) {
   const steps = [
-    { threshold: 0, text: "Connecting to Modbus Gateway (10.1.156.12:502)..." },
-    { threshold: 22, text: "Streaming PowerStudio SCADA Telemetry (172.16.160.49)..." },
+    { threshold: 0, text: "Connecting to Substation OT Modbus Gateway..." },
+    { threshold: 22, text: "Streaming PowerStudio SCADA Telemetry Grid..." },
     { threshold: 48, text: "Synchronizing 33kV Incomer & Substation Transformers..." },
     { threshold: 72, text: "Mapping 150+ Circutor & Elmeasure Energy Nodes..." },
     { threshold: 92, text: "Calibrating Liquid Glass Refraction & Physics Engine..." },
@@ -180,8 +180,8 @@ function AppleGlassLoadingScreen({ progress }: { progress: number }) {
             className="absolute inset-1 rounded-full bg-gradient-to-tr from-amber-500 via-sky-500 to-indigo-500 animate-spin opacity-80 blur-sm"
             style={{ animationDuration: "4s" }}
           />
-          <div className="relative w-16 h-16 rounded-full bg-white dark:bg-[#151928] flex items-center justify-center shadow-lg border border-border">
-            <Zap className="w-8 h-8 fill-amber-500 text-amber-500 animate-pulse" />
+          <div className="relative w-16 h-16 rounded-full bg-white shadow-lg border border-slate-200 flex items-center justify-center p-2.5 overflow-hidden">
+            <img src="/srmist-logo.png" alt="SRMIST Logo" className="w-full h-full object-contain" />
           </div>
         </div>
 
@@ -215,9 +215,9 @@ function AppleGlassLoadingScreen({ progress }: { progress: number }) {
         <div className="mt-6 pt-4 border-t border-border flex items-center justify-between text-[10px] text-muted font-medium">
           <span className="flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            Gateway: 10.1.156.12:502
+            Substation OT Gateway: Online
           </span>
-          <span className="mono-num font-bold">SCADA: 172.16.160.49:5222</span>
+          <span className="font-bold text-slate-700 dark:text-slate-300">SCADA: Campus Grid Connected</span>
         </div>
       </motion.div>
     </motion.div>
@@ -565,10 +565,12 @@ function ExecutiveSpotlightFling({
           className="relative w-full max-w-md p-7 rounded-3xl bg-white dark:bg-[#121522] text-foreground border-2 border-amber-500/60 shadow-[0_30px_90px_rgba(0,0,0,0.8),0_0_60px_rgba(245,158,11,0.35)] overflow-hidden"
         >
           {/* Top Executive Header */}
-          <div className="text-center border-b border-border pb-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-600 dark:text-amber-400 text-[10px] font-extrabold uppercase tracking-widest mb-1.5">
-              <Sparkles className="w-3 h-3 fill-amber-500" />
-              SRMIST PRIMARY GRID DISPATCH
+          <div className="text-center border-b border-border pb-4 flex flex-col items-center">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/95 dark:bg-white/90 border border-slate-200 shadow-sm mb-2">
+              <img src="/srmist-logo.png" alt="SRMIST" className="h-6 w-auto object-contain" />
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-800">
+                Primary Grid Dispatch
+              </span>
             </div>
             <h1 className="font-display font-black text-2xl tracking-tight text-foreground">
               33kV MAIN INCOMER
@@ -1456,13 +1458,20 @@ function CustomCumulativeStudioView({
           >
             ← Back to Electrical Dashboard
           </button>
-          <h1 className="font-display font-black text-2xl sm:text-3xl tracking-tight text-foreground flex items-center gap-2.5">
-            <Layers className="w-7 h-7 text-amber-500" />
-            Custom Cumulative Studio
-          </h1>
-          <p className="text-xs sm:text-sm text-muted font-medium mt-1">
-            Build user-defined aggregations, custom sums, and virtual formulas without altering plant single-line telemetry.
-          </p>
+          <div className="flex items-center gap-3">
+            <div className="h-10 px-2.5 py-1 rounded-2xl bg-white/95 border border-slate-200 shadow-sm flex items-center justify-center shrink-0">
+              <img src="/srmist-logo.png" alt="SRMIST" className="h-7 w-auto object-contain" />
+            </div>
+            <div>
+              <h1 className="font-display font-black text-2xl sm:text-3xl tracking-tight text-foreground flex items-center gap-2.5">
+                <Layers className="w-7 h-7 text-amber-500" />
+                Custom Cumulative Studio
+              </h1>
+              <p className="text-xs sm:text-sm text-muted font-medium mt-1">
+                Build user-defined aggregations, custom sums, and virtual formulas without altering plant single-line telemetry.
+              </p>
+            </div>
+          </div>
         </div>
 
         <button
@@ -1987,8 +1996,8 @@ export default function App() {
         <div className="max-w-7xl mx-auto liquid-glass px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 shadow-xl">
           {/* Brand & Substation Identifier */}
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-400 text-white flex items-center justify-center shadow-lg shadow-amber-500/25 shrink-0">
-              <Zap className="w-5 h-5 fill-white" />
+            <div className="h-10 px-2.5 py-1 rounded-2xl bg-white/95 border border-slate-200 shadow-md flex items-center justify-center shrink-0">
+              <img src="/srmist-logo.png" alt="SRMIST" className="h-7 w-auto object-contain" />
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -2001,7 +2010,9 @@ export default function App() {
               </div>
               <p className="text-[11px] text-muted font-medium mt-0.5 flex items-center gap-1.5">
                 <span>PowerStudio SCADA</span>
-                <span className="mono-num text-[10px]">172.16.160.49:5222</span>
+                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                  Campus Grid Connected
+                </span>
                 <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-black/5 dark:bg-white/10 text-foreground">
                   {sseUp ? "⚡ SSE Stream" : "🔄 3s Polling"}
                 </span>
@@ -2090,7 +2101,7 @@ export default function App() {
                     Live Telemetry Stream Disconnected · SCADA Offline
                   </div>
                   <div className="text-xs font-semibold opacity-90">
-                    Host <span className="mono-num font-mono">172.16.160.49:5222</span> unreachable. All measurements strictly set to 0.00 / INVALID (no synthetic demo fallback).
+                    Substation SCADA Telemetry Gateway unreachable. All measurements strictly set to 0.00 / INVALID (no synthetic demo fallback).
                   </div>
                 </div>
               </div>

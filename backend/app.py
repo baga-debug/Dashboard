@@ -316,7 +316,7 @@ class GlobalState:
         self.last_ts: str = datetime.now(timezone.utc).isoformat()
         # strict real-data only: source none until real source provides data
         self.source: str = "none"
-        self.gateway: Dict[str, Any] = {"reachable": False, "latency_ms": None, "last_ok": None, "error": "no real data yet — awaiting gateway 10.1.156.12:502 or PowerStudio"}
+        self.gateway: Dict[str, Any] = {"reachable": False, "latency_ms": None, "last_ok": None, "error": "no real data yet — awaiting substation gateway or PowerStudio"}
         self.powerstudio: Dict[str, Any] = {"reachable": False, "devices": 0, "last_ok": None, "error": None}
         self.per_slave: Dict[int, Dict[str, Any]] = {}
         self.start_ts = time.time()
@@ -568,7 +568,7 @@ class Simulator:
             if self.state.source not in ("gateway","powerstudio"):
                 self.state.source = "simulator"
             self.state.gateway["reachable"] = False
-            self.state.gateway["error"] = "simulator mode (gateway 10.1.156.12 unreachable)"
+            self.state.gateway["error"] = "simulator mode (substation gateway unreachable)"
             self.state.poll_count += 1
             # update per slave last_ok for those we ticked
             for mid, m in by_id.items():
@@ -1314,7 +1314,7 @@ async def health(request: Request):
             "slaves": per_slave,
             "poll_count": STATE.poll_count,
             "config": {
-                "gateway": f"{CONFIG['gateway']['host']}:{CONFIG['gateway']['port']}",
+                "gateway": "Substation-OT-Gateway:502",
                 "poll_ms": CONFIG["gateway"]["poll_ms"],
                 "slaves": len(CONFIG["slaves"]),
             }
@@ -2097,7 +2097,7 @@ async def api_powerstudio_mc(
     strict = CONFIG.get("poll", {}).get("strict_real_only", False)
     note_out = error if not vars_out else None
     if strict and not vars_out:
-        note_out = (error or "strict real-data only — no mc vars from PowerStudio and no gateway data; no output (no fabrication)") + " | gateway 10.1.156.12:502 unreachable and PowerStudio project empty (<devices></devices>) — check Ethernet/VLAN and Editor"
+        note_out = (error or "strict real-data only — no mc vars from PowerStudio and no gateway data; no output (no fabrication)") + " | substation gateway unreachable and PowerStudio project empty (<devices></devices>) — check Ethernet/VLAN and Editor"
         source = "none"
     elif source == "simulated" and not strict:
         note_out = "PowerStudio project empty — showing simulated mc variables derived from gateway/simulator (will auto-switch to real PowerStudio when you configure devices in Editor)"
@@ -2107,8 +2107,8 @@ async def api_powerstudio_mc(
         "count": len(vars_out),
         "source": source if vars_out else ("none" if strict else source),
         "ts": iso_now(),
-        "gateway": CONFIG["gateway"]["host"] + ":" + str(CONFIG["gateway"]["port"]),
-        "powerstudio": CONFIG["powerstudio"]["host"] + ":" + str(CONFIG["powerstudio"]["port"]),
+        "gateway": "Substation-OT-Gateway:502",
+        "powerstudio": "Campus-PowerStudio-SCADA",
         "vars": sorted(vars_out, key=lambda x: x["name"]),
         "note": note_out,
         "strict": strict,
@@ -2323,7 +2323,7 @@ async def on_startup():
         log.info("SIMULATOR DISABLED — strict real-data only")
         async with STATE.lock:
             STATE.source = "none"
-            STATE.gateway["error"] = "strict real-data only — gateway 10.1.156.12:502 unreachable"
+            STATE.gateway["error"] = "strict real-data only — substation gateway unreachable"
             STATE.combined = {"kw": 0, "kwh": 0, "pf": 0, "active": 0, "total": len(CONFIG["slaves"])}
     # modbus poller (will backoff if unreachable, not crash) — the ONLY real source when strict
     modbus = ModbusPoller(STATE)
